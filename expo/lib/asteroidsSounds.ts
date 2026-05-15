@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { Asset } from 'expo-asset';
 
 export type AsteroidsSoundKey =
   | 'fire'
@@ -39,127 +39,190 @@ const LOOPING: Partial<Record<AsteroidsSoundKey, boolean>> = {
   saucerSmall: true,
 };
 
-type Pool = { players: AudioPlayer[]; cursor: number };
-
 const TAG = '[asteroidsSounds]';
 
-/**
- * Singleton Asteroids sound manager.
- * Module-level so it survives React remounts and dev double-mount.
- */
-class AsteroidsSoundManager {
-  private pools: Partial<Record<AsteroidsSoundKey, Pool>> = {};
-  private ready: boolean = false;
-  private audioModeSet: boolean = false;
-  private loopActive: Partial<Record<AsteroidsSoundKey, boolean>> = {};
+interface SoundBackend {
+  init(): Promise<void>;
+  play(key: AsteroidsSoundKey): void;
+  setLoop(key: AsteroidsSoundKey, active: boolean): void;
+  stopAllLoops(): void;
+  isReady(): boolean;
+}
 
-  init(): void {
-    if (this.ready) {
-      console.log(`${TAG} init() skipped — already ready`);
+/* ============================================================
+ * WEB BACKEND — HTML5 Audio
+ * expo-audio's require() loading is unreliable on web preview.
+ * We use the browser-native HTMLAudioElement which works with
+ * the URL resolved by Metro/expo-asset.
+ * ========================================================== */
+class WebSoundBackend implements SoundBackend {
+  private pools: Partial<Record<AsteroidsSoundKey, { players: HTMLAudioElement[]; cursor: number }>> = {};
+  private loopActive: Partial<Record<AsteroidsSoundKey, boolean>> = {};
+  private ready: boolean = false;
+
+  async init(): Promise<void> {
+    if (this.ready) return;
+    console.log(`${TAG} [web] init() starting`);
+
+    const keys = Object.keys(SOURCES) as AsteroidsSoundKey[];
+    await Promise.all(
+      keys.map(async (key) => {
+        try {
+          const asset = Asset.fromModule(SOURCES[key]);
+          await asset.downloadAsync();
+          const uri = asset.localUri || asset.uri;
+          console.log(`${TAG} [web] resolved`, key, '=>', uri);
+
+          const players: HTMLAudioElement[] = [];
+          for (let i = 0; i < POOL_SIZE[key]; i += 1) {
+            const audio = new Audio(uri);
+            audio.preload = 'auto';
+            if (LOOPING[key]) audio.loop = true;
+            audio.volume = 1;
+            audio.addEventListener('error', (e) => {
+              console.warn(`${TAG} [web] audio error`, key, `#${i}`, e);
+            });
+            // Force load
+            try {
+              audio.load();
+            } catch {}
+            players.push(audio);
+          }
+          this.pools[key] = { players, cursor: 0 };
+        } catch (e) {
+          console.warn(`${TAG} [web] failed to load`, key, e);
+        }
+      }),
+    );
+
+    this.ready = true;
+    console.log(`${TAG} [web] init() done`);
+  }
+
+  private playOne(audio: HTMLAudioElement, key: AsteroidsSoundKey): void {
+    try {
+      audio.currentTime = 0;
+    } catch {}
+    const p = audio.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch((e) => console.warn(`${TAG} [web] play() rejected`, key, e?.message ?? e));
+    }
+  }
+
+  play(key: AsteroidsSoundKey): void {
+    if (!this.ready) {
+      console.warn(`${TAG} [web] play(${key}) before init`);
       return;
     }
-    console.log(`${TAG} init() starting on`, Platform.OS);
+    const pool = this.pools[key];
+    if (!pool || pool.players.length === 0) {
+      console.warn(`${TAG} [web] play(${key}) no pool`);
+      return;
+    }
+    const audio = pool.players[pool.cursor];
+    pool.cursor = (pool.cursor + 1) % pool.players.length;
+    this.playOne(audio, key);
+  }
 
-    if (!this.audioModeSet) {
-      this.audioModeSet = true;
-      setAudioModeAsync({
+  setLoop(key: AsteroidsSoundKey, active: boolean): void {
+    if (!this.ready) return;
+    const pool = this.pools[key];
+    if (!pool || pool.players.length === 0) return;
+    if (this.loopActive[key] === active) return;
+    this.loopActive[key] = active;
+    const audio = pool.players[0];
+    if (active) {
+      this.playOne(audio, key);
+    } else {
+      try {
+        audio.pause();
+      } catch (e) {
+        console.warn(`${TAG} [web] pause failed`, key, e);
+      }
+    }
+  }
+
+  stopAllLoops(): void {
+    (Object.keys(this.loopActive) as AsteroidsSoundKey[]).forEach((key) => {
+      if (this.loopActive[key]) this.setLoop(key, false);
+    });
+  }
+
+  isReady(): boolean {
+    return this.ready;
+  }
+}
+
+/* ============================================================
+ * NATIVE BACKEND — expo-audio
+ * ========================================================== */
+class NativeSoundBackend implements SoundBackend {
+  // Use 'any' so the web bundle never tries to resolve expo-audio types/runtime.
+  private pools: Partial<Record<AsteroidsSoundKey, { players: any[]; cursor: number }>> = {};
+  private loopActive: Partial<Record<AsteroidsSoundKey, boolean>> = {};
+  private ready: boolean = false;
+
+  async init(): Promise<void> {
+    if (this.ready) return;
+    console.log(`${TAG} [native] init() starting on`, Platform.OS);
+
+    // Lazy require so web bundle does not pull expo-audio
+    const ExpoAudio = require('expo-audio') as typeof import('expo-audio');
+
+    try {
+      await ExpoAudio.setAudioModeAsync({
         playsInSilentMode: true,
         shouldPlayInBackground: false,
         interruptionMode: 'mixWithOthers',
         interruptionModeAndroid: 'duckOthers',
-      })
-        .then(() => console.log(`${TAG} setAudioModeAsync OK`))
-        .catch((e) => console.warn(`${TAG} setAudioModeAsync FAILED`, e));
+      });
+      console.log(`${TAG} [native] setAudioModeAsync OK`);
+    } catch (e) {
+      console.warn(`${TAG} [native] setAudioModeAsync FAILED`, e);
     }
 
     (Object.keys(SOURCES) as AsteroidsSoundKey[]).forEach((key) => {
-      const players: AudioPlayer[] = [];
-      const size = POOL_SIZE[key];
-      for (let i = 0; i < size; i += 1) {
+      const players: any[] = [];
+      for (let i = 0; i < POOL_SIZE[key]; i += 1) {
         try {
-          const p = createAudioPlayer(SOURCES[key]);
-          if (LOOPING[key]) {
-            p.loop = true;
-          }
+          const p = ExpoAudio.createAudioPlayer(SOURCES[key]);
+          if (LOOPING[key]) p.loop = true;
           p.volume = 1;
           players.push(p);
-          console.log(`${TAG} created player`, key, `#${i}`, 'isLoaded=', p.isLoaded);
         } catch (e) {
-          console.warn(`${TAG} createAudioPlayer FAILED`, key, e);
+          console.warn(`${TAG} [native] createAudioPlayer FAILED`, key, e);
         }
       }
       this.pools[key] = { players, cursor: 0 };
     });
 
     this.ready = true;
-    console.log(`${TAG} init() done — ready`);
+    console.log(`${TAG} [native] init() done`);
   }
 
-  private playPlayer(player: AudioPlayer, key: AsteroidsSoundKey, fromLoop: boolean): void {
-    const start = (): void => {
-      try {
-        if (!fromLoop) {
-          try {
-            // seekTo returns a Promise; we don't need to await for non-looping sfx
-            const sp = player.seekTo(0) as unknown as Promise<void> | void;
-            if (sp && typeof (sp as Promise<void>).catch === 'function') {
-              (sp as Promise<void>).catch((e) =>
-                console.warn(`${TAG} seekTo failed`, key, e),
-              );
-            }
-          } catch (e) {
-            console.warn(`${TAG} seekTo threw`, key, e);
-          }
-        }
-        player.play();
-      } catch (e) {
-        console.warn(`${TAG} play() threw`, key, e);
-      }
-    };
-
-    if (player.isLoaded) {
-      start();
-      return;
-    }
-
-    // Wait until the player is loaded before first play
-    console.log(`${TAG} ${key} not loaded yet — waiting for playbackStatusUpdate`);
-    let fired = false;
-    const sub = player.addListener('playbackStatusUpdate', (status) => {
-      if (fired) return;
-      if (status?.isLoaded) {
-        fired = true;
+  private playOne(player: any, key: AsteroidsSoundKey, fromLoop: boolean): void {
+    try {
+      if (!fromLoop) {
         try {
-          sub.remove();
+          const sp = player.seekTo(0);
+          if (sp && typeof sp.catch === 'function') {
+            sp.catch((e: unknown) => console.warn(`${TAG} [native] seekTo failed`, key, e));
+          }
         } catch {}
-        start();
       }
-    });
-    // Fallback timer
-    setTimeout(() => {
-      if (fired) return;
-      fired = true;
-      try {
-        sub.remove();
-      } catch {}
-      if (player.isLoaded) start();
-      else console.warn(`${TAG} ${key} still not loaded after 1500ms — giving up`);
-    }, 1500);
+      player.play();
+    } catch (e) {
+      console.warn(`${TAG} [native] play() threw`, key, e);
+    }
   }
 
   play(key: AsteroidsSoundKey): void {
-    if (!this.ready) {
-      console.warn(`${TAG} play(${key}) called before init()`);
-      return;
-    }
+    if (!this.ready) return;
     const pool = this.pools[key];
-    if (!pool || pool.players.length === 0) {
-      console.warn(`${TAG} play(${key}) no pool`);
-      return;
-    }
+    if (!pool || pool.players.length === 0) return;
     const player = pool.players[pool.cursor];
     pool.cursor = (pool.cursor + 1) % pool.players.length;
-    this.playPlayer(player, key, false);
+    this.playOne(player, key, false);
   }
 
   setLoop(key: AsteroidsSoundKey, active: boolean): void {
@@ -170,21 +233,19 @@ class AsteroidsSoundManager {
     this.loopActive[key] = active;
     const player = pool.players[0];
     if (active) {
-      this.playPlayer(player, key, true);
+      this.playOne(player, key, true);
     } else {
       try {
         player.pause();
       } catch (e) {
-        console.warn(`${TAG} pause failed`, key, e);
+        console.warn(`${TAG} [native] pause failed`, key, e);
       }
     }
   }
 
   stopAllLoops(): void {
     (Object.keys(this.loopActive) as AsteroidsSoundKey[]).forEach((key) => {
-      if (this.loopActive[key]) {
-        this.setLoop(key, false);
-      }
+      if (this.loopActive[key]) this.setLoop(key, false);
     });
   }
 
@@ -193,12 +254,44 @@ class AsteroidsSoundManager {
   }
 }
 
+/* ============================================================
+ * Public manager — picks backend per platform
+ * ========================================================== */
+class AsteroidsSoundManager {
+  private backend: SoundBackend;
+  private initStarted: boolean = false;
+
+  constructor() {
+    this.backend = Platform.OS === 'web' ? new WebSoundBackend() : new NativeSoundBackend();
+  }
+
+  init(): void {
+    if (this.initStarted) return;
+    this.initStarted = true;
+    this.backend.init().catch((e) => console.warn(`${TAG} init() rejected`, e));
+  }
+
+  play(key: AsteroidsSoundKey): void {
+    this.backend.play(key);
+  }
+
+  setLoop(key: AsteroidsSoundKey, active: boolean): void {
+    this.backend.setLoop(key, active);
+  }
+
+  stopAllLoops(): void {
+    this.backend.stopAllLoops();
+  }
+
+  isReady(): boolean {
+    return this.backend.isReady();
+  }
+}
+
 let singleton: AsteroidsSoundManager | null = null;
 
 export function getAsteroidsSounds(): AsteroidsSoundManager {
-  if (!singleton) {
-    singleton = new AsteroidsSoundManager();
-  }
+  if (!singleton) singleton = new AsteroidsSoundManager();
   return singleton;
 }
 
