@@ -6,7 +6,9 @@ import { AsteroidsControls } from '../components/TouchPad';
 import { AsteroidsSprite, type AsteroidsSpriteKey } from '../components/AsteroidsSprite';
 import { ASTEROIDS_DIMENSIONS, useAsteroidsGame } from '../games/asteroids/useAsteroidsGame';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
-import { AsteroidsSoundManager } from '../lib/asteroidsSounds';
+import { getAsteroidsSounds } from '../lib/asteroidsSounds';
+
+const DEBUG_SFX = true;
 
 const LARGE_SPRITES: AsteroidsSpriteKey[] = ['asteroidLarge1', 'asteroidLarge2', 'asteroidLarge3'];
 const MEDIUM_SPRITES: AsteroidsSpriteKey[] = ['asteroidMedium1', 'asteroidMedium2', 'asteroidMedium3'];
@@ -30,19 +32,14 @@ export function AsteroidsGameScreen({
   const [askName, setAskName] = useState<boolean>(false);
   const [stageSize, setStageSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
 
-  const soundsRef = useRef<AsteroidsSoundManager | null>(null);
-  if (soundsRef.current === null) {
-    soundsRef.current = new AsteroidsSoundManager();
-  }
+  const soundsRef = useRef(getAsteroidsSounds());
 
   useEffect(() => {
     const mgr = soundsRef.current;
-    if (!mgr) return;
     mgr.init();
     return () => {
-      mgr.stopAll();
-      mgr.release();
-      soundsRef.current = null;
+      // Don't release the singleton — just stop loops so we keep audio alive across remounts
+      mgr.stopAllLoops();
     };
   }, []);
 
@@ -86,6 +83,9 @@ export function AsteroidsGameScreen({
       mgr.play('bangLarge');
       mgr.setLoop('thrust', false);
     }
+    if (prevDeathRef.current && !state.death.active) {
+      // ship respawned
+    }
     prevDeathRef.current = state.death.active;
 
     // Extra life
@@ -97,8 +97,7 @@ export function AsteroidsGameScreen({
 
   useEffect(() => {
     if (state.status === 'gameOver') {
-      const mgr = soundsRef.current;
-      if (mgr) mgr.stopAll();
+      soundsRef.current.stopAllLoops();
       void qualifiesForHighScore('asteroids', state.score).then(setAskName);
     }
   }, [state.status, state.score]);
@@ -118,24 +117,26 @@ export function AsteroidsGameScreen({
   const wrappedThrust = useCallback(
     (active: boolean) => {
       thrustActiveRef.current = active;
-      const mgr = soundsRef.current;
-      if (mgr) mgr.setLoop('thrust', active && !prevDeathRef.current);
+      soundsRef.current.setLoop('thrust', active && !prevDeathRef.current);
       controls.thrust(active);
     },
     [controls],
   );
 
   const wrappedFire = useCallback(() => {
-    const mgr = soundsRef.current;
-    if (mgr) mgr.play('fire');
+    soundsRef.current.play('fire');
     controls.fire();
   }, [controls]);
 
   const wrappedHyperspace = useCallback(() => {
-    const mgr = soundsRef.current;
-    if (mgr) mgr.play('bangSmall');
+    soundsRef.current.play('bangSmall');
     controls.hyperspace();
   }, [controls]);
+
+  const onTestSfx = useCallback(() => {
+    console.log('[AsteroidsGameScreen] Test SFX pressed');
+    soundsRef.current.play('fire');
+  }, []);
 
   // --- Stage layout / scaling ---
   const onStageLayout = useCallback((e: LayoutChangeEvent): void => {
@@ -288,6 +289,7 @@ export function AsteroidsGameScreen({
       <View style={styles.bottom}>
         <ArcadeButton label="Pause" onPress={controls.pause} />
         <ArcadeButton label="Quitter" onPress={onExit} variant="ghost" />
+        {DEBUG_SFX && <ArcadeButton label="Test SFX" onPress={onTestSfx} variant="ghost" />}
       </View>
 
       <Modal transparent visible={askName}>
