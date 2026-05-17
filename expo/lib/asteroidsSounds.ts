@@ -12,14 +12,14 @@ export type AsteroidsSoundKey =
   | 'extraShip';
 
 const SOURCES: Record<AsteroidsSoundKey, number> = {
-  fire: require('../assets/sounds/fire.wav'),
-  thrust: require('../assets/sounds/thrust.wav'),
-  bangLarge: require('../assets/sounds/bangLarge.wav'),
-  bangMedium: require('../assets/sounds/bangMedium.wav'),
-  bangSmall: require('../assets/sounds/bangSmall.wav'),
-  saucerBig: require('../assets/sounds/saucerBig.wav'),
-  saucerSmall: require('../assets/sounds/saucerSmall.wav'),
-  extraShip: require('../assets/sounds/extraShip.wav'),
+  fire: require('../assets/sounds/fire.mp3'),
+  thrust: require('../assets/sounds/thrust.mp3'),
+  bangLarge: require('../assets/sounds/bangLarge.mp3'),
+  bangMedium: require('../assets/sounds/bangMedium.mp3'),
+  bangSmall: require('../assets/sounds/bangSmall.mp3'),
+  saucerBig: require('../assets/sounds/saucerBig.mp3'),
+  saucerSmall: require('../assets/sounds/saucerSmall.mp3'),
+  extraShip: require('../assets/sounds/extraShip.mp3'),
 };
 
 const POOL_SIZE: Record<AsteroidsSoundKey, number> = {
