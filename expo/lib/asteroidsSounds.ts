@@ -40,6 +40,7 @@ const LOOPING: Partial<Record<AsteroidsSoundKey, boolean>> = {
 };
 
 const TAG = '[asteroidsSounds]';
+const DEBUG_WEB = false;
 
 interface SoundBackend {
   init(): Promise<void>;
@@ -60,6 +61,97 @@ class WebSoundBackend implements SoundBackend {
   private loopActive: Partial<Record<AsteroidsSoundKey, boolean>> = {};
   private ready: boolean = false;
 
+  /**
+   * Build candidate URLs to try fetching the audio from. Metro/Expo asset
+   * resolution on web preview environments (especially when iframed) is
+   * inconsistent: `asset.uri` may be a relative dev URL that returns 404 when
+   * fetched directly. We try several variants and use the first that returns
+   * a valid audio response.
+   */
+  private buildCandidates(key: AsteroidsSoundKey, asset: Asset): string[] {
+    const out: string[] = [];
+    const push = (u: string | null | undefined) => {
+      if (!u) return;
+      if (!out.includes(u)) out.push(u);
+    };
+
+    const origin: string =
+      typeof window !== 'undefined' && window.location ? window.location.origin : '';
+
+    const toAbs = (u: string): string => {
+      if (/^https?:\/\//i.test(u) || u.startsWith('blob:') || u.startsWith('data:')) return u;
+      if (u.startsWith('/')) return origin + u;
+      return origin + '/' + u.replace(/^\.?\//, '');
+    };
+
+    if (asset.localUri) push(toAbs(asset.localUri));
+    if (asset.uri) push(toAbs(asset.uri));
+
+    // Production export path: assets are copied to /assets/<original-path>
+    push(toAbs(`/assets/assets/sounds/${key}.mp3`));
+    push(toAbs(`/assets/sounds/${key}.mp3`));
+    push(toAbs(`assets/sounds/${key}.mp3`));
+
+    return out;
+  }
+
+  private async resolvePlayableUri(key: AsteroidsSoundKey): Promise<string | null> {
+    const asset = Asset.fromModule(SOURCES[key]);
+    try {
+      await asset.downloadAsync();
+    } catch (e) {
+      console.warn(`${TAG} [web] downloadAsync failed`, key, e);
+    }
+
+    console.log(`${TAG} [web] asset`, key, {
+      uri: asset.uri,
+      localUri: asset.localUri,
+      hash: asset.hash,
+      type: asset.type,
+    });
+
+    const candidates = this.buildCandidates(key, asset);
+    console.log(`${TAG} [web] candidates`, key, candidates);
+
+    for (const url of candidates) {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          console.warn(`${TAG} [web] candidate ${url} -> HTTP ${resp.status}`);
+          continue;
+        }
+        const rawBlob = await resp.blob();
+        if (rawBlob.size < 100) {
+          console.warn(`${TAG} [web] candidate ${url} too small (${rawBlob.size}B), skipping`);
+          continue;
+        }
+        const blob =
+          rawBlob.type && rawBlob.type.startsWith('audio/')
+            ? rawBlob
+            : new Blob([await rawBlob.arrayBuffer()], { type: 'audio/mpeg' });
+        const objUrl = URL.createObjectURL(blob);
+        console.log(
+          `${TAG} [web] PICKED`,
+          key,
+          'src=',
+          url,
+          'size=',
+          blob.size,
+          'type=',
+          blob.type,
+          'objectURL=',
+          objUrl,
+        );
+        return objUrl;
+      } catch (e) {
+        console.warn(`${TAG} [web] candidate ${url} fetch failed`, e);
+      }
+    }
+
+    console.warn(`${TAG} [web] no playable candidate found for`, key);
+    return null;
+  }
+
   async init(): Promise<void> {
     if (this.ready) return;
     console.log(`${TAG} [web] init() starting`);
@@ -68,28 +160,10 @@ class WebSoundBackend implements SoundBackend {
     await Promise.all(
       keys.map(async (key) => {
         try {
-          const asset = Asset.fromModule(SOURCES[key]);
-          await asset.downloadAsync();
-          const rawUri = asset.localUri || asset.uri;
-          console.log(`${TAG} [web] resolved`, key, '=>', rawUri);
-
-          // Fetch as blob so we get a clean object URL with proper audio MIME.
-          // The Metro dev URL (/assets/?unstable_path=...) is not always recognized
-          // as a playable source by HTMLAudioElement directly.
-          let playableUri: string = rawUri;
-          try {
-            const resp = await fetch(rawUri);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const rawBlob = await resp.blob();
-            // Force correct MIME for mp3 if server didn't set it
-            const blob =
-              rawBlob.type && rawBlob.type.startsWith('audio/')
-                ? rawBlob
-                : new Blob([await rawBlob.arrayBuffer()], { type: 'audio/mpeg' });
-            playableUri = URL.createObjectURL(blob);
-            console.log(`${TAG} [web] blob ready`, key, 'size=', blob.size, 'type=', blob.type);
-          } catch (fetchErr) {
-            console.warn(`${TAG} [web] fetch->blob failed, falling back to raw uri`, key, fetchErr);
+          const playableUri = await this.resolvePlayableUri(key);
+          if (!playableUri) {
+            console.warn(`${TAG} [web] skipping ${key} — no playable URI`);
+            return;
           }
 
           const players: HTMLAudioElement[] = [];
@@ -98,7 +172,6 @@ class WebSoundBackend implements SoundBackend {
             audio.preload = 'auto';
             if (LOOPING[key]) audio.loop = true;
             audio.volume = 1;
-            audio.crossOrigin = 'anonymous';
             audio.addEventListener('error', () => {
               const err = audio.error;
               console.warn(
@@ -112,6 +185,9 @@ class WebSoundBackend implements SoundBackend {
                 'src=',
                 audio.src,
               );
+            });
+            audio.addEventListener('canplaythrough', () => {
+              if (DEBUG_WEB) console.log(`${TAG} [web] canplaythrough`, key, `#${i}`);
             });
             audio.src = playableUri;
             try {
@@ -127,7 +203,7 @@ class WebSoundBackend implements SoundBackend {
     );
 
     this.ready = true;
-    console.log(`${TAG} [web] init() done`);
+    console.log(`${TAG} [web] init() done — keys ready:`, Object.keys(this.pools));
   }
 
   private playOne(audio: HTMLAudioElement, key: AsteroidsSoundKey): void {
