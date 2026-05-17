@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import { Asset } from 'expo-asset';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export type AsteroidsSoundKey =
   | 'fire'
   | 'thrust'
@@ -40,7 +42,6 @@ const LOOPING: Partial<Record<AsteroidsSoundKey, boolean>> = {
 };
 
 const TAG = '[asteroidsSounds]';
-const DEBUG_WEB = false;
 
 interface SoundBackend {
   init(): Promise<void>;
@@ -51,208 +52,223 @@ interface SoundBackend {
 }
 
 /* ============================================================
- * WEB BACKEND — HTML5 Audio
- * expo-audio's require() loading is unreliable on web preview.
- * We use the browser-native HTMLAudioElement which works with
- * the URL resolved by Metro/expo-asset.
+ * WEB BACKEND — Web Audio API synthesizer
+ *
+ * Reason: Metro/Expo bundled audio assets are not reliably resolvable on
+ * the Rork web preview (static host with no Metro server) nor in some
+ * Expo Go web contexts. Rather than depending on fragile asset URLs we
+ * synthesize retro Asteroids-style SFX directly with the Web Audio API.
+ * Zero file dependency, works in every web environment.
  * ========================================================== */
 class WebSoundBackend implements SoundBackend {
-  private pools: Partial<Record<AsteroidsSoundKey, { players: HTMLAudioElement[]; cursor: number }>> = {};
-  private loopActive: Partial<Record<AsteroidsSoundKey, boolean>> = {};
+  private ctx: AudioContext | null = null;
+  private master: GainNode | null = null;
   private ready: boolean = false;
-
-  /**
-   * Build candidate URLs to try fetching the audio from. Metro/Expo asset
-   * resolution on web preview environments (especially when iframed) is
-   * inconsistent: `asset.uri` may be a relative dev URL that returns 404 when
-   * fetched directly. We try several variants and use the first that returns
-   * a valid audio response.
-   */
-  private buildCandidates(key: AsteroidsSoundKey, asset: Asset): string[] {
-    const out: string[] = [];
-    const push = (u: string | null | undefined) => {
-      if (!u) return;
-      if (!out.includes(u)) out.push(u);
-    };
-
-    const origin: string =
-      typeof window !== 'undefined' && window.location ? window.location.origin : '';
-
-    const toAbs = (u: string): string => {
-      if (/^https?:\/\//i.test(u) || u.startsWith('blob:') || u.startsWith('data:')) return u;
-      if (u.startsWith('/')) return origin + u;
-      return origin + '/' + u.replace(/^\.?\//, '');
-    };
-
-    if (asset.localUri) push(toAbs(asset.localUri));
-    if (asset.uri) push(toAbs(asset.uri));
-
-    // Production export path: assets are copied to /assets/<original-path>
-    push(toAbs(`/assets/assets/sounds/${key}.mp3`));
-    push(toAbs(`/assets/sounds/${key}.mp3`));
-    push(toAbs(`assets/sounds/${key}.mp3`));
-
-    return out;
-  }
-
-  private async resolvePlayableUri(key: AsteroidsSoundKey): Promise<string | null> {
-    const asset = Asset.fromModule(SOURCES[key]);
-    try {
-      await asset.downloadAsync();
-    } catch (e) {
-      console.warn(`${TAG} [web] downloadAsync failed`, key, e);
-    }
-
-    console.log(`${TAG} [web] asset`, key, {
-      uri: asset.uri,
-      localUri: asset.localUri,
-      hash: asset.hash,
-      type: asset.type,
-    });
-
-    const candidates = this.buildCandidates(key, asset);
-    console.log(`${TAG} [web] candidates`, key, candidates);
-
-    for (const url of candidates) {
-      try {
-        const resp = await fetch(url);
-        if (!resp.ok) {
-          console.warn(`${TAG} [web] candidate ${url} -> HTTP ${resp.status}`);
-          continue;
-        }
-        const rawBlob = await resp.blob();
-        if (rawBlob.size < 100) {
-          console.warn(`${TAG} [web] candidate ${url} too small (${rawBlob.size}B), skipping`);
-          continue;
-        }
-        const blob =
-          rawBlob.type && rawBlob.type.startsWith('audio/')
-            ? rawBlob
-            : new Blob([await rawBlob.arrayBuffer()], { type: 'audio/mpeg' });
-        const objUrl = URL.createObjectURL(blob);
-        console.log(
-          `${TAG} [web] PICKED`,
-          key,
-          'src=',
-          url,
-          'size=',
-          blob.size,
-          'type=',
-          blob.type,
-          'objectURL=',
-          objUrl,
-        );
-        return objUrl;
-      } catch (e) {
-        console.warn(`${TAG} [web] candidate ${url} fetch failed`, e);
-      }
-    }
-
-    console.warn(`${TAG} [web] no playable candidate found for`, key);
-    return null;
-  }
+  private loops: Map<AsteroidsSoundKey, { stop: () => void }> = new Map();
 
   async init(): Promise<void> {
     if (this.ready) return;
-    console.log(`${TAG} [web] init() starting`);
-
-    const keys = Object.keys(SOURCES) as AsteroidsSoundKey[];
-    await Promise.all(
-      keys.map(async (key) => {
-        try {
-          const playableUri = await this.resolvePlayableUri(key);
-          if (!playableUri) {
-            console.warn(`${TAG} [web] skipping ${key} — no playable URI`);
-            return;
-          }
-
-          const players: HTMLAudioElement[] = [];
-          for (let i = 0; i < POOL_SIZE[key]; i += 1) {
-            const audio = new Audio();
-            audio.preload = 'auto';
-            if (LOOPING[key]) audio.loop = true;
-            audio.volume = 1;
-            audio.addEventListener('error', () => {
-              const err = audio.error;
-              console.warn(
-                `${TAG} [web] audio error`,
-                key,
-                `#${i}`,
-                'code=',
-                err?.code,
-                'message=',
-                err?.message,
-                'src=',
-                audio.src,
-              );
-            });
-            audio.addEventListener('canplaythrough', () => {
-              if (DEBUG_WEB) console.log(`${TAG} [web] canplaythrough`, key, `#${i}`);
-            });
-            audio.src = playableUri;
-            try {
-              audio.load();
-            } catch {}
-            players.push(audio);
-          }
-          this.pools[key] = { players, cursor: 0 };
-        } catch (e) {
-          console.warn(`${TAG} [web] failed to load`, key, e);
-        }
-      }),
-    );
-
-    this.ready = true;
-    console.log(`${TAG} [web] init() done — keys ready:`, Object.keys(this.pools));
+    console.log(`${TAG} [web] init() starting (Web Audio synth)`);
+    try {
+      const Ctor: typeof AudioContext =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!Ctor) {
+        console.warn(`${TAG} [web] AudioContext unavailable`);
+        return;
+      }
+      this.ctx = new Ctor();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.6;
+      this.master.connect(this.ctx.destination);
+      this.ready = true;
+      console.log(`${TAG} [web] AudioContext ready, state=`, this.ctx.state);
+    } catch (e) {
+      console.warn(`${TAG} [web] AudioContext init failed`, e);
+    }
   }
 
-  private playOne(audio: HTMLAudioElement, key: AsteroidsSoundKey): void {
-    try {
-      audio.currentTime = 0;
-    } catch {}
-    const p = audio.play();
-    if (p && typeof p.catch === 'function') {
-      p.catch((e) => console.warn(`${TAG} [web] play() rejected`, key, e?.message ?? e));
+  private ensureRunning(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch((e) => console.warn(`${TAG} [web] resume failed`, e));
+    }
+  }
+
+  private envOsc(
+    type: OscillatorType,
+    freqStart: number,
+    freqEnd: number,
+    duration: number,
+    gain: number,
+  ): void {
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master) return;
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freqStart, t0);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), t0 + duration);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(g);
+    g.connect(master);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.05);
+  }
+
+  private envNoise(duration: number, gain: number, lowpass?: number): void {
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master) return;
+    const t0 = ctx.currentTime;
+    const len = Math.max(1, Math.floor(ctx.sampleRate * duration));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i += 1) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    if (lowpass !== undefined) {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = lowpass;
+      src.connect(lp);
+      lp.connect(g);
+    } else {
+      src.connect(g);
+    }
+    g.connect(master);
+    src.start(t0);
+    src.stop(t0 + duration + 0.05);
+  }
+
+  private playKey(key: AsteroidsSoundKey): void {
+    switch (key) {
+      case 'fire':
+        this.envOsc('square', 880, 220, 0.12, 0.25);
+        break;
+      case 'bangLarge':
+        this.envNoise(0.7, 0.5, 600);
+        this.envOsc('sawtooth', 90, 35, 0.7, 0.35);
+        break;
+      case 'bangMedium':
+        this.envNoise(0.45, 0.4, 900);
+        this.envOsc('sawtooth', 160, 60, 0.45, 0.3);
+        break;
+      case 'bangSmall':
+        this.envNoise(0.25, 0.35, 1400);
+        this.envOsc('sawtooth', 260, 110, 0.25, 0.25);
+        break;
+      case 'extraShip':
+        this.envOsc('sine', 660, 660, 0.18, 0.3);
+        setTimeout(() => this.envOsc('sine', 880, 880, 0.18, 0.3), 180);
+        break;
+      default:
+        break;
     }
   }
 
   play(key: AsteroidsSoundKey): void {
-    if (!this.ready) {
-      console.warn(`${TAG} [web] play(${key}) before init`);
-      return;
+    if (!this.ready || !this.ctx) return;
+    this.ensureRunning();
+    try {
+      this.playKey(key);
+    } catch (e) {
+      console.warn(`${TAG} [web] play(${key}) failed`, e);
     }
-    const pool = this.pools[key];
-    if (!pool || pool.players.length === 0) {
-      console.warn(`${TAG} [web] play(${key}) no pool`);
-      return;
+  }
+
+  private startLoop(key: AsteroidsSoundKey): { stop: () => void } | null {
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master) return null;
+
+    if (key === 'thrust') {
+      // White noise lowpassed = engine rumble
+      const len = Math.max(1, Math.floor(ctx.sampleRate * 0.5));
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i += 1) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 380;
+      const g = ctx.createGain();
+      g.gain.value = 0.18;
+      src.connect(lp);
+      lp.connect(g);
+      g.connect(master);
+      src.start();
+      return {
+        stop: () => {
+          try {
+            src.stop();
+          } catch {}
+          try {
+            g.disconnect();
+          } catch {}
+        },
+      };
     }
-    const audio = pool.players[pool.cursor];
-    pool.cursor = (pool.cursor + 1) % pool.players.length;
-    this.playOne(audio, key);
+
+    // Saucer loops: pulsating tone
+    const baseFreq = key === 'saucerBig' ? 220 : 520;
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = baseFreq;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = key === 'saucerBig' ? 4 : 8;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = baseFreq * 0.15;
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+    const g = ctx.createGain();
+    g.gain.value = 0.18;
+    osc.connect(g);
+    g.connect(master);
+    osc.start();
+    lfo.start();
+    return {
+      stop: () => {
+        try {
+          osc.stop();
+        } catch {}
+        try {
+          lfo.stop();
+        } catch {}
+        try {
+          g.disconnect();
+        } catch {}
+      },
+    };
   }
 
   setLoop(key: AsteroidsSoundKey, active: boolean): void {
-    if (!this.ready) return;
-    const pool = this.pools[key];
-    if (!pool || pool.players.length === 0) return;
-    if (this.loopActive[key] === active) return;
-    this.loopActive[key] = active;
-    const audio = pool.players[0];
+    if (!this.ready || !this.ctx) return;
+    this.ensureRunning();
+    const existing = this.loops.get(key);
     if (active) {
-      this.playOne(audio, key);
+      if (existing) return;
+      const handle = this.startLoop(key);
+      if (handle) this.loops.set(key, handle);
     } else {
-      try {
-        audio.pause();
-      } catch (e) {
-        console.warn(`${TAG} [web] pause failed`, key, e);
-      }
+      if (!existing) return;
+      existing.stop();
+      this.loops.delete(key);
     }
   }
 
   stopAllLoops(): void {
-    (Object.keys(this.loopActive) as AsteroidsSoundKey[]).forEach((key) => {
-      if (this.loopActive[key]) this.setLoop(key, false);
-    });
+    this.loops.forEach((l) => l.stop());
+    this.loops.clear();
   }
 
   isReady(): boolean {
