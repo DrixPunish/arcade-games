@@ -8,6 +8,11 @@
     "scheme": "rork-app",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "assetBundlePatterns": [
+      "assets/sounds/*",
+      "assets/images/**/*",
+      "**/*"
+    ],
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",

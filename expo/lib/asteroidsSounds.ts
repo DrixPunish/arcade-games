@@ -288,23 +288,39 @@ class NativeSoundBackend implements SoundBackend {
       console.warn(`${TAG} [native] setAudioModeAsync FAILED`, e);
     }
 
-    (Object.keys(SOURCES) as AsteroidsSoundKey[]).forEach((key) => {
-      const players: any[] = [];
-      for (let i = 0; i < POOL_SIZE[key]; i += 1) {
+    const keys = Object.keys(SOURCES) as AsteroidsSoundKey[];
+    await Promise.all(
+      keys.map(async (key) => {
         try {
-          const p = ExpoAudio.createAudioPlayer(SOURCES[key]);
-          if (LOOPING[key]) p.loop = true;
-          p.volume = 1;
-          players.push(p);
+          const asset = Asset.fromModule(SOURCES[key]);
+          await asset.downloadAsync();
+          const uri = asset.localUri ?? asset.uri;
+          if (!uri) {
+            console.warn(`${TAG} [native] no URI for`, key);
+            return;
+          }
+          console.log(`${TAG} [native] asset ready`, key, uri);
+
+          const players: any[] = [];
+          for (let i = 0; i < POOL_SIZE[key]; i += 1) {
+            try {
+              const p = ExpoAudio.createAudioPlayer({ uri });
+              if (LOOPING[key]) p.loop = true;
+              p.volume = 1;
+              players.push(p);
+            } catch (e) {
+              console.warn(`${TAG} [native] createAudioPlayer FAILED`, key, e);
+            }
+          }
+          this.pools[key] = { players, cursor: 0 };
         } catch (e) {
-          console.warn(`${TAG} [native] createAudioPlayer FAILED`, key, e);
+          console.warn(`${TAG} [native] asset load FAILED`, key, e);
         }
-      }
-      this.pools[key] = { players, cursor: 0 };
-    });
+      }),
+    );
 
     this.ready = true;
-    console.log(`${TAG} [native] init() done`);
+    console.log(`${TAG} [native] init() done — keys ready:`, Object.keys(this.pools));
   }
 
   private playOne(player: any, key: AsteroidsSoundKey, fromLoop: boolean): void {
