@@ -70,19 +70,50 @@ class WebSoundBackend implements SoundBackend {
         try {
           const asset = Asset.fromModule(SOURCES[key]);
           await asset.downloadAsync();
-          const uri = asset.localUri || asset.uri;
-          console.log(`${TAG} [web] resolved`, key, '=>', uri);
+          const rawUri = asset.localUri || asset.uri;
+          console.log(`${TAG} [web] resolved`, key, '=>', rawUri);
+
+          // Fetch as blob so we get a clean object URL with proper audio MIME.
+          // The Metro dev URL (/assets/?unstable_path=...) is not always recognized
+          // as a playable source by HTMLAudioElement directly.
+          let playableUri: string = rawUri;
+          try {
+            const resp = await fetch(rawUri);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const rawBlob = await resp.blob();
+            // Force correct MIME for mp3 if server didn't set it
+            const blob =
+              rawBlob.type && rawBlob.type.startsWith('audio/')
+                ? rawBlob
+                : new Blob([await rawBlob.arrayBuffer()], { type: 'audio/mpeg' });
+            playableUri = URL.createObjectURL(blob);
+            console.log(`${TAG} [web] blob ready`, key, 'size=', blob.size, 'type=', blob.type);
+          } catch (fetchErr) {
+            console.warn(`${TAG} [web] fetch->blob failed, falling back to raw uri`, key, fetchErr);
+          }
 
           const players: HTMLAudioElement[] = [];
           for (let i = 0; i < POOL_SIZE[key]; i += 1) {
-            const audio = new Audio(uri);
+            const audio = new Audio();
             audio.preload = 'auto';
             if (LOOPING[key]) audio.loop = true;
             audio.volume = 1;
-            audio.addEventListener('error', (e) => {
-              console.warn(`${TAG} [web] audio error`, key, `#${i}`, e);
+            audio.crossOrigin = 'anonymous';
+            audio.addEventListener('error', () => {
+              const err = audio.error;
+              console.warn(
+                `${TAG} [web] audio error`,
+                key,
+                `#${i}`,
+                'code=',
+                err?.code,
+                'message=',
+                err?.message,
+                'src=',
+                audio.src,
+              );
             });
-            // Force load
+            audio.src = playableUri;
             try {
               audio.load();
             } catch {}
