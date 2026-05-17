@@ -1,8 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Rect } from 'react-native-svg';
 import { ArcadeButton } from '../App';
-import { ControlButton } from '../components/TouchPad';
+
+function ControlButton({ label, onPress, onDown, onUp, wide }: { label: string; onPress?: () => void; onDown?: () => void; onUp?: () => void; wide?: boolean }): React.ReactElement {
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={onDown}
+      onPressOut={onUp}
+      style={({ pressed }) => [ctrlStyles.btn, wide && ctrlStyles.wide, pressed && ctrlStyles.pressed]}
+    >
+      <Text style={ctrlStyles.label}>{label}</Text>
+    </Pressable>
+  );
+}
+const ctrlStyles = StyleSheet.create({
+  btn: { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(114,251,255,0.5)', borderWidth: 2, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 22, minWidth: 84, marginHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
+  wide: { minWidth: 140 },
+  pressed: { backgroundColor: 'rgba(114,251,255,0.18)' },
+  label: { color: '#eaffff', fontWeight: '900', fontSize: 18, letterSpacing: 1 },
+});
 import { INVADERS_DIMENSIONS, useSpaceInvadersGame } from '../games/space-invaders/useSpaceInvadersGame';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 
