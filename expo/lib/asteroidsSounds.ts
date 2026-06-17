@@ -42,6 +42,14 @@ const LOOPING: Partial<Record<AsteroidsSoundKey, boolean>> = {
 
 const TAG = '[asteroidsSounds]';
 
+let _logErrorOnce = true;
+function logOnce(...args: any[]): void {
+  if (_logErrorOnce) {
+    _logErrorOnce = false;
+    console.warn(...args);
+  }
+}
+
 interface SoundBackend {
   init(): Promise<void>;
   play(key: AsteroidsSoundKey): void;
@@ -52,9 +60,7 @@ interface SoundBackend {
 
 /* ============================================================
  * Shared synthesis: produce Float32Array PCM samples for each key.
- * The web backend uses Web Audio API live-graph synthesis;
- * the native backend pre-renders these to WAV files.
- * Both share the same sound design.
+ * Both backends use the same sound design.
  * ========================================================== */
 const SAMPLE_RATE = 22050;
 
@@ -74,21 +80,19 @@ function genOscSweep(
   let phase = 0;
   for (let i = 0; i < n; i += 1) {
     const t = i / n;
-    // exponential frequency interp like Web Audio's exponentialRampToValueAtTime
-    const f = freqStart * Math.pow(Math.max(1, freqEnd) / Math.max(1, freqStart), t);
+    const f = freqStart * ((Math.max(1, freqEnd) / Math.max(1, freqStart)) ** t);
     phase += (2 * Math.PI * f) / SAMPLE_RATE;
     let s = 0;
     if (type === 'sine') s = Math.sin(phase);
     else if (type === 'square') s = Math.sin(phase) >= 0 ? 1 : -1;
     else {
-      // sawtooth
       const p = (phase / (2 * Math.PI)) % 1;
       s = 2 * p - 1;
     }
-    // attack/decay envelope: exponential decay from gain to ~0
-    const env = i < SAMPLE_RATE * 0.005
-      ? (i / (SAMPLE_RATE * 0.005)) * gain
-      : gain * Math.pow(0.0001 / Math.max(0.0001, gain), t);
+    const env =
+      i < SAMPLE_RATE * 0.005
+        ? (i / (SAMPLE_RATE * 0.005)) * gain
+        : gain * ((0.0001 / Math.max(0.0001, gain)) ** t);
     out[i] = s * env;
   }
   return out;
@@ -97,7 +101,6 @@ function genOscSweep(
 function genNoise(duration: number, gain: number, lowpassHz?: number): Float32Array {
   const n = Math.max(1, Math.floor(SAMPLE_RATE * duration));
   const out = new Float32Array(n);
-  // simple one-pole lowpass: y = y_prev + a * (x - y_prev), a = dt / (RC + dt)
   let a = 1;
   if (lowpassHz !== undefined && lowpassHz > 0) {
     const dt = 1 / SAMPLE_RATE;
@@ -109,7 +112,7 @@ function genNoise(duration: number, gain: number, lowpassHz?: number): Float32Ar
     const x = Math.random() * 2 - 1;
     y = y + a * (x - y);
     const t = i / n;
-    const env = gain * Math.pow(0.0001 / Math.max(0.0001, gain), t);
+    const env = gain * ((0.0001 / Math.max(0.0001, gain)) ** t);
     out[i] = y * env;
   }
   return out;
@@ -127,13 +130,11 @@ function genNoiseLoop(durationSec: number, gain: number, lowpassHz: number): Flo
     y = y + a * (x - y);
     out[i] = y * gain;
   }
-  // crossfade tail to head for seamless loop
   const fade = Math.min(Math.floor(SAMPLE_RATE * 0.02), Math.floor(n / 4));
   for (let i = 0; i < fade; i += 1) {
     const k = i / fade;
     out[i] = out[i] * k + out[n - fade + i] * (1 - k);
   }
-  // overwrite tail copy region
   for (let i = 0; i < fade; i += 1) {
     out[n - fade + i] = out[i];
   }
@@ -141,7 +142,6 @@ function genNoiseLoop(durationSec: number, gain: number, lowpassHz: number): Flo
 }
 
 function genSaucerLoop(baseFreq: number, lfoHz: number, durationSec: number, gain: number): Float32Array {
-  // length chosen so it loops seamlessly: integer number of LFO cycles
   const cycles = Math.max(1, Math.round(durationSec * lfoHz));
   const total = cycles / lfoHz;
   const n = Math.max(1, Math.floor(SAMPLE_RATE * total));
@@ -151,7 +151,7 @@ function genSaucerLoop(baseFreq: number, lfoHz: number, durationSec: number, gai
     const t = i / SAMPLE_RATE;
     const f = baseFreq + Math.sin(2 * Math.PI * lfoHz * t) * baseFreq * 0.15;
     phase += (2 * Math.PI * f) / SAMPLE_RATE;
-    const s = Math.sin(phase) >= 0 ? 1 : -1; // square
+    const s = Math.sin(phase) >= 0 ? 1 : -1;
     out[i] = s * gain;
   }
   return out;
@@ -163,7 +163,6 @@ function mix(...buffers: Float32Array[]): Float32Array {
   for (const b of buffers) {
     for (let i = 0; i < b.length; i += 1) out[i] += b[i];
   }
-  // soft clip
   for (let i = 0; i < out.length; i += 1) out[i] = clamp(out[i], -0.98, 0.98);
   return out;
 }
@@ -240,8 +239,26 @@ function encodeWav(samples: Float32Array): Uint8Array {
   return new Uint8Array(buffer);
 }
 
+/** Encode Uint8Array to base64 in safe chunks (avoids call-stack overflow). */
+function uint8ToBase64(bytes: Uint8Array): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const len = bytes.length;
+  let result = '';
+  for (let i = 0; i < len; i += 3) {
+    const a = bytes[i];
+    const b = i + 1 < len ? bytes[i + 1] : 0;
+    const c = i + 2 < len ? bytes[i + 2] : 0;
+    result += chars[a >> 2];
+    result += chars[((a & 3) << 4) | (b >> 4)];
+    result += i + 1 < len ? chars[((b & 15) << 2) | (c >> 6)] : '=';
+    result += i + 2 < len ? chars[c & 63] : '=';
+  }
+  return result;
+}
+
 /* ============================================================
  * WEB BACKEND — Web Audio API live synth
+ * Zero external dependencies. Works in any browser.
  * ========================================================== */
 class WebSoundBackend implements SoundBackend {
   private ctx: AudioContext | null = null;
@@ -350,7 +367,9 @@ class WebSoundBackend implements SoundBackend {
         break;
       case 'extraShip':
         this.envOsc('sine', 660, 660, 0.18, 0.3);
-        setTimeout(() => this.envOsc('sine', 880, 880, 0.18, 0.3), 180);
+        setTimeout(() => {
+          try { this.envOsc('sine', 880, 880, 0.18, 0.3); } catch {}
+        }, 180);
         break;
       default:
         break;
@@ -448,8 +467,8 @@ class WebSoundBackend implements SoundBackend {
 }
 
 /* ============================================================
- * NATIVE BACKEND — pre-render synth → WAV files in cache,
- * play via expo-audio. No bundled audio assets required.
+ * NATIVE BACKEND — pre-render synth WAV to base64 data URIs,
+ * play via expo-audio. No file system dependency.
  * ========================================================== */
 class NativeSoundBackend implements SoundBackend {
   private pools: Partial<Record<AsteroidsSoundKey, { players: any[]; cursor: number }>> = {};
@@ -458,10 +477,22 @@ class NativeSoundBackend implements SoundBackend {
 
   async init(): Promise<void> {
     if (this.ready) return;
-    console.log(`${TAG} [native] init() starting (synth → WAV) on`, Platform.OS);
+    console.log(`${TAG} [native] init() starting (synth → data URI) on`, Platform.OS);
 
-    const ExpoAudio = require('expo-audio') as typeof import('expo-audio');
-    const ExpoFS = require('expo-file-system') as typeof import('expo-file-system');
+    // Lazy-require expo-audio — only on native platforms
+    let ExpoAudio: any;
+    try {
+      ExpoAudio = require('expo-audio');
+      if (!ExpoAudio || typeof ExpoAudio.createAudioPlayer !== 'function') {
+        console.warn(`${TAG} [native] expo-audio unavailable or missing createAudioPlayer`);
+        this.ready = true;
+        return;
+      }
+    } catch (e) {
+      console.warn(`${TAG} [native] require('expo-audio') failed`, e);
+      this.ready = true;
+      return;
+    }
 
     try {
       await ExpoAudio.setAudioModeAsync({
@@ -483,37 +514,32 @@ class NativeSoundBackend implements SoundBackend {
           continue;
         }
         const wav = encodeWav(samples);
-
-        const file = new ExpoFS.File(ExpoFS.Paths.cache, `asteroids_${key}.wav`);
-        try { file.delete(); } catch {}
-        try {
-          file.create();
-        } catch (e) {
-          console.warn(`${TAG} [native] file.create() failed`, key, e);
-        }
-        try {
-          file.write(wav);
-        } catch (e) {
-          console.warn(`${TAG} [native] file.write() failed`, key, e);
-          continue;
-        }
-        const uri = file.uri;
-        console.log(`${TAG} [native] wrote WAV`, key, `${wav.byteLength}B`, uri);
+        const base64 = uint8ToBase64(wav);
+        const dataUri = `data:audio/wav;base64,${base64}`;
+        console.log(
+          `${TAG} [native] synthesized ${key}: ${wav.byteLength}B WAV → ${dataUri.length} char data URI`,
+        );
 
         const players: any[] = [];
         for (let i = 0; i < POOL_SIZE[key]; i += 1) {
           try {
-            const p = ExpoAudio.createAudioPlayer({ uri });
+            const p = ExpoAudio.createAudioPlayer({ uri: dataUri });
             if (LOOPING[key]) p.loop = true;
             p.volume = 1;
             players.push(p);
           } catch (e) {
-            console.warn(`${TAG} [native] createAudioPlayer FAILED`, key, e);
+            console.warn(`${TAG} [native] createAudioPlayer FAILED for ${key}#${i}`, e);
           }
         }
-        this.pools[key] = { players, cursor: 0 };
+
+        if (players.length > 0) {
+          this.pools[key] = { players, cursor: 0 };
+          console.log(`${TAG} [native] pool ready: ${key} (${players.length} players)`);
+        } else {
+          console.warn(`${TAG} [native] no players created for`, key);
+        }
       } catch (e) {
-        console.warn(`${TAG} [native] synth/write FAILED`, key, e);
+        console.warn(`${TAG} [native] synth FAILED for`, key, e);
       }
     }
 
@@ -579,33 +605,57 @@ class NativeSoundBackend implements SoundBackend {
  * Public manager — picks backend per platform
  * ========================================================== */
 class AsteroidsSoundManager {
-  private backend: SoundBackend;
+  private backend: SoundBackend | null = null;
   private initStarted: boolean = false;
 
   constructor() {
-    this.backend = Platform.OS === 'web' ? new WebSoundBackend() : new NativeSoundBackend();
+    try {
+      this.backend =
+        Platform.OS === 'web' ? new WebSoundBackend() : new NativeSoundBackend();
+    } catch (e) {
+      // If backend construction fails (shouldn't happen), use a no-op fallback
+      console.warn(`${TAG} backend construction failed`, e);
+      this.backend = null;
+    }
   }
 
   init(): void {
-    if (this.initStarted) return;
+    if (this.initStarted || !this.backend) return;
     this.initStarted = true;
-    this.backend.init().catch((e) => console.warn(`${TAG} init() rejected`, e));
+    this.backend.init().catch((e) => {
+      console.warn(`${TAG} init() rejected`, e);
+    });
   }
 
   play(key: AsteroidsSoundKey): void {
-    this.backend.play(key);
+    if (!this.backend) return;
+    try {
+      this.backend.play(key);
+    } catch (e) {
+      logOnce(`${TAG} play(${key}) threw — suppressing further audio errors`, e);
+    }
   }
 
   setLoop(key: AsteroidsSoundKey, active: boolean): void {
-    this.backend.setLoop(key, active);
+    if (!this.backend) return;
+    try {
+      this.backend.setLoop(key, active);
+    } catch (e) {
+      logOnce(`${TAG} setLoop(${key}) threw`, e);
+    }
   }
 
   stopAllLoops(): void {
-    this.backend.stopAllLoops();
+    if (!this.backend) return;
+    try {
+      this.backend.stopAllLoops();
+    } catch {
+      // silence
+    }
   }
 
   isReady(): boolean {
-    return this.backend.isReady();
+    return this.backend?.isReady() ?? false;
   }
 }
 

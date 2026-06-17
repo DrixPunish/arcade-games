@@ -32,14 +32,25 @@ export function AsteroidsGameScreen({
   const [askName, setAskName] = useState<boolean>(false);
   const [stageSize, setStageSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
 
-  const soundsRef = useRef(getAsteroidsSounds());
+  const soundsRef = useRef<ReturnType<typeof getAsteroidsSounds> | null>(null);
+  if (!soundsRef.current) {
+    try {
+      soundsRef.current = getAsteroidsSounds();
+    } catch (e) {
+      console.warn('[AsteroidsGameScreen] failed to get audio manager', e);
+    }
+  }
 
   useEffect(() => {
-    const mgr = soundsRef.current;
-    mgr.init();
+    try {
+      soundsRef.current?.init();
+    } catch (e) {
+      console.warn('[AsteroidsGameScreen] audio init failed', e);
+    }
     return () => {
-      // Don't release the singleton — just stop loops so we keep audio alive across remounts
-      mgr.stopAllLoops();
+      try {
+        soundsRef.current?.stopAllLoops();
+      } catch {}
     };
   }, []);
 
@@ -52,53 +63,53 @@ export function AsteroidsGameScreen({
   useEffect(() => {
     const mgr = soundsRef.current;
     if (!mgr) return;
-
-    // Asteroid destroyed -> bang based on previous size
-    const prev = prevAsteroidsRef.current;
-    const currentIds = new Set(state.asteroids.map((a) => a.id));
-    for (const old of prev) {
-      if (!currentIds.has(old.id)) {
-        if (old.size === 'large') mgr.play('bangLarge');
-        else if (old.size === 'medium') mgr.play('bangMedium');
-        else mgr.play('bangSmall');
+    try {
+      // Asteroid destroyed -> bang based on previous size
+      const prev = prevAsteroidsRef.current;
+      const currentIds = new Set(state.asteroids.map((a) => a.id));
+      for (const old of prev) {
+        if (!currentIds.has(old.id)) {
+          if (old.size === 'large') mgr.play('bangLarge');
+          else if (old.size === 'medium') mgr.play('bangMedium');
+          else mgr.play('bangSmall');
+        }
       }
-    }
-    prevAsteroidsRef.current = state.asteroids;
+      prevAsteroidsRef.current = state.asteroids;
 
-    // Saucer presence -> loop sound
-    const hasBig = state.saucers.some((s) => s.kind === 'large');
-    const hasSmall = state.saucers.some((s) => s.kind === 'small');
-    mgr.setLoop('saucerBig', hasBig);
-    mgr.setLoop('saucerSmall', hasSmall);
+      // Saucer presence -> loop sound
+      const hasBig = state.saucers.some((s) => s.kind === 'large');
+      const hasSmall = state.saucers.some((s) => s.kind === 'small');
+      mgr.setLoop('saucerBig', hasBig);
+      mgr.setLoop('saucerSmall', hasSmall);
 
-    // Saucer destroyed
-    const prevSaucers = prevSaucersRef.current;
-    if (prevSaucers.length > state.saucers.length) {
-      mgr.play('bangMedium');
-    }
-    prevSaucersRef.current = state.saucers;
+      // Saucer destroyed
+      const prevSaucers = prevSaucersRef.current;
+      if (prevSaucers.length > state.saucers.length) {
+        mgr.play('bangMedium');
+      }
+      prevSaucersRef.current = state.saucers;
 
-    // Ship death
-    if (!prevDeathRef.current && state.death.active) {
-      mgr.play('bangLarge');
-      mgr.setLoop('thrust', false);
-    }
-    if (prevDeathRef.current && !state.death.active) {
-      // ship respawned
-    }
-    prevDeathRef.current = state.death.active;
+      // Ship death
+      if (!prevDeathRef.current && state.death.active) {
+        mgr.play('bangLarge');
+        mgr.setLoop('thrust', false);
+      }
+      prevDeathRef.current = state.death.active;
 
-    // Extra life
-    if (state.lives > prevLivesRef.current) {
-      mgr.play('extraShip');
+      // Extra life
+      if (state.lives > prevLivesRef.current) {
+        mgr.play('extraShip');
+      }
+      prevLivesRef.current = state.lives;
+    } catch (e) {
+      console.warn('[AsteroidsGameScreen] sound effect error', e);
     }
-    prevLivesRef.current = state.lives;
   }, [state.asteroids, state.saucers, state.death.active, state.lives]);
 
   useEffect(() => {
     if (state.status === 'gameOver') {
-      soundsRef.current.stopAllLoops();
-      void qualifiesForHighScore('asteroids', state.score).then(setAskName);
+      try { soundsRef.current?.stopAllLoops(); } catch {}
+      void qualifiesForHighScore('asteroids', state.score).then(setAskName).catch(() => {});
     }
   }, [state.status, state.score]);
 
@@ -117,25 +128,25 @@ export function AsteroidsGameScreen({
   const wrappedThrust = useCallback(
     (active: boolean) => {
       thrustActiveRef.current = active;
-      soundsRef.current.setLoop('thrust', active && !prevDeathRef.current);
+      try { soundsRef.current?.setLoop('thrust', active && !prevDeathRef.current); } catch {}
       controls.thrust(active);
     },
     [controls],
   );
 
   const wrappedFire = useCallback(() => {
-    soundsRef.current.play('fire');
+    try { soundsRef.current?.play('fire'); } catch {}
     controls.fire();
   }, [controls]);
 
   const wrappedHyperspace = useCallback(() => {
-    soundsRef.current.play('bangSmall');
+    try { soundsRef.current?.play('bangSmall'); } catch {}
     controls.hyperspace();
   }, [controls]);
 
   const onTestSfx = useCallback(() => {
     console.log('[AsteroidsGameScreen] Test SFX pressed');
-    soundsRef.current.play('fire');
+    soundsRef.current?.play('fire');
   }, []);
 
   // --- Stage layout / scaling ---
