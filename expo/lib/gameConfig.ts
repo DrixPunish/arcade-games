@@ -9,7 +9,11 @@ export const CONFIG = {
     maxBullets: 4,
     shipRadius: 12,
     saucerFireEvery: 1.45,
+    /** Une vie bonus tous les N points. */
     extraLifeEvery: 10000,
+    /** Au-dessus de ce score, les soucoupes qui apparaissent sont les petites (celles qui visent). */
+    smallSaucerScore: 10000,
+    /** Nombre de gros astéroïdes à détruire avant qu'une soucoupe ne se pointe. */
     largeSaucerLargeAsteroids: 12,
     asteroidSpawnSafeRadius: 120,
     deathAnimation: 0.85,
@@ -27,6 +31,8 @@ export const CONFIG = {
     bunkerCols: 7,
     bunkerCount: 4,
     ufoPoints: 100,
+    /** Invincibilité après avoir perdu une vie (secondes). */
+    respawnInvincible: 1.5,
   },
 } as const;
 

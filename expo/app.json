@@ -1,16 +1,14 @@
 {
   "expo": {
     "name": "Arcade Games",
-    "slug": "3s732tqsewdy6f0a7fzef",
+    "slug": "arcade",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "rork-app",
+    "scheme": "arcade",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "assetBundlePatterns": [
-      "assets/sounds/*",
-      "assets/images/**/*",
       "**/*"
     ],
     "splash": {
@@ -20,31 +18,42 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.rork.3s732tqsewdy6f0a7fzef"
+      "bundleIdentifier": "com.drixpunish.arcade"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.3s732tqsewdy6f0a7fzef"
+      "package": "com.drixpunish.arcade",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://rork.com/"
-        }
-      ],
-      "expo-font",
-      "expo-web-browser",
+      "expo-router",
       "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "drixpunish-2",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "40373d0b-f784-425b-a19f-2800954daeb5"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/40373d0b-f784-425b-a19f-2800954daeb5",
+      "fallbackToCacheTimeout": 10000
     }
   }
 }

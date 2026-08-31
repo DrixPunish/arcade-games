@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutChangeEvent, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { ArcadeButton } from '../App';
+import { ArcadeButton } from '../components/ArcadeButton';
 import { AsteroidsControls } from '../components/TouchPad';
 import { AsteroidsSprite, type AsteroidsSpriteKey } from '../components/AsteroidsSprite';
 import { ASTEROIDS_DIMENSIONS, useAsteroidsGame } from '../games/asteroids/useAsteroidsGame';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 import { getAsteroidsSounds } from '../lib/asteroidsSounds';
 
-const DEBUG_SFX = true;
+/** Bouton « Test SFX » : uniquement en développement. */
+const DEBUG_SFX = __DEV__;
 
 const LARGE_SPRITES: AsteroidsSpriteKey[] = ['asteroidLarge1', 'asteroidLarge2', 'asteroidLarge3'];
 const MEDIUM_SPRITES: AsteroidsSpriteKey[] = ['asteroidMedium1', 'asteroidMedium2', 'asteroidMedium3'];
@@ -59,19 +60,27 @@ export function AsteroidsGameScreen({
   const prevSaucersRef = useRef(state.saucers);
   const prevDeathRef = useRef(state.death.active);
   const prevLivesRef = useRef(state.lives);
+  const prevLevelRef = useRef(state.level);
 
   useEffect(() => {
     const mgr = soundsRef.current;
     if (!mgr) return;
     try {
-      // Asteroid destroyed -> bang based on previous size
-      const prev = prevAsteroidsRef.current;
-      const currentIds = new Set(state.asteroids.map((a) => a.id));
-      for (const old of prev) {
-        if (!currentIds.has(old.id)) {
-          if (old.size === 'large') mgr.play('bangLarge');
-          else if (old.size === 'medium') mgr.play('bangMedium');
-          else mgr.play('bangSmall');
+      // Asteroid destroyed -> bang based on previous size.
+      // On saute la comparaison quand le champ entier est remplacé (restart,
+      // niveau suivant) : sinon toute la liste « disparaît » d'un coup et on
+      // déclencherait une dizaine d'explosions simultanées.
+      const fieldReplaced = state.level !== prevLevelRef.current;
+      prevLevelRef.current = state.level;
+      if (!fieldReplaced) {
+        const prev = prevAsteroidsRef.current;
+        const currentIds = new Set(state.asteroids.map((a) => a.id));
+        for (const old of prev) {
+          if (!currentIds.has(old.id)) {
+            if (old.size === 'large') mgr.play('bangLarge');
+            else if (old.size === 'medium') mgr.play('bangMedium');
+            else mgr.play('bangSmall');
+          }
         }
       }
       prevAsteroidsRef.current = state.asteroids;
@@ -104,7 +113,7 @@ export function AsteroidsGameScreen({
     } catch (e) {
       console.warn('[AsteroidsGameScreen] sound effect error', e);
     }
-  }, [state.asteroids, state.saucers, state.death.active, state.lives]);
+  }, [state.asteroids, state.saucers, state.death.active, state.lives, state.level]);
 
   useEffect(() => {
     if (state.status === 'gameOver') {
@@ -200,12 +209,12 @@ export function AsteroidsGameScreen({
           <>
             {state.asteroids.map(renderAsteroid)}
 
-            {state.saucers.map((sc, i) => {
+            {state.saucers.map((sc) => {
               const saucerSize = (sc.kind === 'small' ? 32 : 46) * scale;
               const saucerH = saucerSize * (80 / 96);
               return (
                 <View
-                  key={`${sc.kind}-${i}`}
+                  key={sc.id}
                   style={{
                     position: 'absolute',
                     left: offX + sc.x * scale - saucerSize / 2,
@@ -217,11 +226,11 @@ export function AsteroidsGameScreen({
               );
             })}
 
-            {state.bullets.map((b, i) => {
+            {state.bullets.map((b) => {
               const bSize = (b.enemy ? 7 : 6) * scale;
               return (
                 <View
-                  key={`bullet-${i}`}
+                  key={b.id}
                   style={{
                     position: 'absolute',
                     left: offX + b.x * scale - bSize / 2,
@@ -303,7 +312,7 @@ export function AsteroidsGameScreen({
         {DEBUG_SFX && <ArcadeButton label="Test SFX" onPress={onTestSfx} variant="ghost" />}
       </View>
 
-      <Modal transparent visible={askName}>
+      <Modal transparent visible={askName} onRequestClose={() => setAskName(false)}>
         <View style={styles.modal}>
           <View style={styles.card}>
             <Text style={styles.overTitle}>Nouveau high score</Text>

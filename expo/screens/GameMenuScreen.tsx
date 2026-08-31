@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { ArcadeButton } from '../App';
+import { ArcadeButton } from '../components/ArcadeButton';
 
 export function GameMenuScreen({ title, icon, onPlay, onScores, onBack, secondaryVariant = 'ghost' }: { title: string; icon: React.ReactNode; onPlay: () => void; onScores: () => void; onBack: () => void; secondaryVariant?: 'primary' | 'ghost' }): React.ReactElement {
   return (

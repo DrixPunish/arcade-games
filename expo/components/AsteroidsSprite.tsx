@@ -27,7 +27,8 @@ type Frame = { sx: number; sy: number; sw: number; sh: number };
  * Layout (Joe Strout, miniscript.org):
  *   Row 1 (y=0..160):   3 large asteroids, 160x160 each
  *   Row 2 (y=160..256): 3 medium asteroids 96x96, then saucer 96x80
- *   Row 3 (y=256..320): 3 small asteroids 64x64, ship 96x64, ship thrust 96x64, two 32x32 bullets
+ *   Row 3 (y=256..320): 3 small asteroids 64x64, ship 96x64, ship thrust 96x64,
+ *                       then two 32x32 bullets at y=288
  */
 export const SPRITE_FRAMES: Record<AsteroidsSpriteKey, Frame> = {
   asteroidLarge1: { sx: 0, sy: 0, sw: 160, sh: 160 },
@@ -42,7 +43,7 @@ export const SPRITE_FRAMES: Record<AsteroidsSpriteKey, Frame> = {
   ship: { sx: 192, sy: 256, sw: 96, sh: 64 },
   shipThrust: { sx: 288, sy: 256, sw: 96, sh: 64 },
   saucer: { sx: 416, sy: 160, sw: 96, sh: 80 },
-  bullet: { sx: 448, sy: 272, sw: 32, sh: 32 },
+  bullet: { sx: 448, sy: 288, sw: 32, sh: 32 },
 };
 
 type Props = {

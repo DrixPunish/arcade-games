@@ -1,7 +1,5 @@
 import { Platform } from 'react-native';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 export type AsteroidsSoundKey =
   | 'fire'
   | 'thrust'
@@ -42,12 +40,17 @@ const LOOPING: Partial<Record<AsteroidsSoundKey, boolean>> = {
 
 const TAG = '[asteroidsSounds]';
 
-let _logErrorOnce = true;
-function logOnce(...args: any[]): void {
-  if (_logErrorOnce) {
-    _logErrorOnce = false;
-    console.warn(...args);
-  }
+/** Log de développement : muet dans un build de production. */
+function debugLog(...args: unknown[]): void {
+  if (__DEV__) console.log(...args);
+}
+
+const loggedOnce = new Set<string>();
+/** Avertit une fois par sujet, pour ne pas noyer la console à 60 fps. */
+function logOnce(topic: string, ...args: unknown[]): void {
+  if (loggedOnce.has(topic)) return;
+  loggedOnce.add(topic);
+  console.warn(...args);
 }
 
 interface SoundBackend {
@@ -268,7 +271,7 @@ class WebSoundBackend implements SoundBackend {
 
   async init(): Promise<void> {
     if (this.ready) return;
-    console.log(`${TAG} [web] init() starting (Web Audio synth)`);
+    debugLog(`${TAG} [web] init() starting (Web Audio synth)`);
     try {
       const Ctor: typeof AudioContext =
         (window as any).AudioContext || (window as any).webkitAudioContext;
@@ -281,7 +284,7 @@ class WebSoundBackend implements SoundBackend {
       this.master.gain.value = 0.6;
       this.master.connect(this.ctx.destination);
       this.ready = true;
-      console.log(`${TAG} [web] AudioContext ready, state=`, this.ctx.state);
+      debugLog(`${TAG} [web] AudioContext ready, state=`, this.ctx.state);
     } catch (e) {
       console.warn(`${TAG} [web] AudioContext init failed`, e);
     }
@@ -477,11 +480,12 @@ class NativeSoundBackend implements SoundBackend {
 
   async init(): Promise<void> {
     if (this.ready) return;
-    console.log(`${TAG} [native] init() starting (synth → data URI) on`, Platform.OS);
+    debugLog(`${TAG} [native] init() starting (synth → data URI) on`, Platform.OS);
 
     // Lazy-require expo-audio — only on native platforms
     let ExpoAudio: any;
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- chargement paresseux, expo-audio ne doit pas etre importe sur le web
       ExpoAudio = require('expo-audio');
       if (!ExpoAudio || typeof ExpoAudio.createAudioPlayer !== 'function') {
         console.warn(`${TAG} [native] expo-audio unavailable or missing createAudioPlayer`);
@@ -501,7 +505,7 @@ class NativeSoundBackend implements SoundBackend {
         interruptionMode: 'mixWithOthers',
         interruptionModeAndroid: 'duckOthers',
       });
-      console.log(`${TAG} [native] setAudioModeAsync OK`);
+      debugLog(`${TAG} [native] setAudioModeAsync OK`);
     } catch (e) {
       console.warn(`${TAG} [native] setAudioModeAsync FAILED`, e);
     }
@@ -516,7 +520,7 @@ class NativeSoundBackend implements SoundBackend {
         const wav = encodeWav(samples);
         const base64 = uint8ToBase64(wav);
         const dataUri = `data:audio/wav;base64,${base64}`;
-        console.log(
+        debugLog(
           `${TAG} [native] synthesized ${key}: ${wav.byteLength}B WAV → ${dataUri.length} char data URI`,
         );
 
@@ -534,7 +538,7 @@ class NativeSoundBackend implements SoundBackend {
 
         if (players.length > 0) {
           this.pools[key] = { players, cursor: 0 };
-          console.log(`${TAG} [native] pool ready: ${key} (${players.length} players)`);
+          debugLog(`${TAG} [native] pool ready: ${key} (${players.length} players)`);
         } else {
           console.warn(`${TAG} [native] no players created for`, key);
         }
@@ -544,7 +548,7 @@ class NativeSoundBackend implements SoundBackend {
     }
 
     this.ready = true;
-    console.log(`${TAG} [native] init() done — keys ready:`, Object.keys(this.pools));
+    debugLog(`${TAG} [native] init() done — keys ready:`, Object.keys(this.pools));
   }
 
   private playOne(player: any, key: AsteroidsSoundKey, fromLoop: boolean): void {
@@ -632,7 +636,7 @@ class AsteroidsSoundManager {
     try {
       this.backend.play(key);
     } catch (e) {
-      logOnce(`${TAG} play(${key}) threw — suppressing further audio errors`, e);
+      logOnce(`play:${key}`, `${TAG} play(${key}) threw`, e);
     }
   }
 
@@ -641,7 +645,7 @@ class AsteroidsSoundManager {
     try {
       this.backend.setLoop(key, active);
     } catch (e) {
-      logOnce(`${TAG} setLoop(${key}) threw`, e);
+      logOnce(`setLoop:${key}`, `${TAG} setLoop(${key}) threw`, e);
     }
   }
 

@@ -1,0 +1,15 @@
+Arcade Games - test sur Expo Go
+================================
+
+Compte Expo : drixpunish-2   (il FAUT etre connecte avec ce compte dans Expo Go)
+Projet      : https://expo.dev/accounts/drixpunish-2/projects/arcade
+Canal       : preview        Runtime : exposdk:54.0.0
+
+Lien a ouvrir dans Expo Go :
+exp://u.expo.dev/40373d0b-f784-425b-a19f-2800954daeb5?channel-name=preview
+
+QR code (a scanner avec l'appareil photo) :
+https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=exp%3A%2F%2Fu.expo.dev%2F40373d0b-f784-425b-a19f-2800954daeb5%3Fchannel-name%3Dpreview
+
+Publier une mise a jour (depuis expo/) :
+  eas update --branch preview --message "<resume>"
