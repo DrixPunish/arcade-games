@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Rect } from 'react-native-svg';
 
 import { ArcadeButton } from '../components/ArcadeButton';
 import { ControlButton } from '../components/ControlButton';
+import { HighScorePrompt } from '../components/HighScorePrompt';
 import { INVADERS_DIMENSIONS, useSpaceInvadersGame } from '../games/space-invaders/useSpaceInvadersGame';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 
@@ -17,8 +18,8 @@ export function SpaceInvadersGameScreen({
   onScores: () => void;
 }): React.ReactElement {
   const { state, controls } = useSpaceInvadersGame();
-  const [initials, setInitials] = useState<string>('AAA');
   const [askName, setAskName] = useState<boolean>(false);
+  const [saving, setSaving] = useState<boolean>(false);
 
   useEffect(() => {
     if (state.status !== 'gameOver') return;
@@ -31,15 +32,16 @@ export function SpaceInvadersGameScreen({
     };
   }, [state.status, state.score]);
 
-  const submit = useCallback(async (): Promise<void> => {
-    await saveHighScore('spaceInvaders', {
-      initials: initials.slice(0, 3).toUpperCase(),
-      score: state.score,
-      date: Date.now(),
-    });
-    setAskName(false);
-    onScores();
-  }, [initials, state.score, onScores]);
+  const submit = useCallback(
+    async (initials: string): Promise<void> => {
+      setSaving(true);
+      await saveHighScore('spaceInvaders', { initials, score: state.score, date: Date.now() });
+      setSaving(false);
+      setAskName(false);
+      onScores();
+    },
+    [state.score, onScores],
+  );
 
   // Le joueur clignote pendant son invincibilité de réapparition.
   const playerVisible = state.invincible <= 0 || Math.floor(state.invincible * 10) % 2 === 0;
@@ -161,21 +163,12 @@ export function SpaceInvadersGameScreen({
 
       <ArcadeButton label="Quitter" onPress={onExit} variant="ghost" />
 
-      <Modal transparent visible={askName} onRequestClose={() => setAskName(false)}>
-        <View style={styles.modal}>
-          <View style={styles.card}>
-            <Text style={styles.overTitle}>Nouveau high score</Text>
-            <TextInput
-              value={initials}
-              onChangeText={setInitials}
-              maxLength={3}
-              autoCapitalize="characters"
-              style={styles.input}
-            />
-            <ArcadeButton label="Enregistrer" onPress={() => void submit()} />
-          </View>
-        </View>
-      </Modal>
+      <HighScorePrompt
+        visible={askName}
+        saving={saving}
+        onSubmit={(initials) => void submit(initials)}
+        onDismiss={() => setAskName(false)}
+      />
     </View>
   );
 }
@@ -214,29 +207,4 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   overTitle: { color: '#fff', fontWeight: '900', fontSize: 28, textAlign: 'center' },
-  modal: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    backgroundColor: '#071426',
-    padding: 24,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#72fbff',
-    gap: 16,
-    alignItems: 'center',
-  },
-  input: {
-    color: '#fff',
-    borderBottomWidth: 2,
-    borderColor: '#ffe083',
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: 8,
-    minWidth: 130,
-    textAlign: 'center',
-  },
 });

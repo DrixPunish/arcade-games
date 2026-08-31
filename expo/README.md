@@ -45,13 +45,15 @@ expo/
 ├── components/
 │   ├── ArcadeButton.tsx          # bouton commun à tous les écrans
 │   ├── ControlButton.tsx         # bouton de contrôle (Space Invaders)
+│   ├── HighScorePrompt.tsx       # saisie des initiales en fin de partie
 │   ├── TouchPad.tsx              # pavé multi-touch (Asteroids)
 │   └── AsteroidsSprite.tsx       # découpe de la sprite sheet
 ├── hooks/useGameLoop.ts          # boucle requestAnimationFrame (delta en s)
 ├── lib/
 │   ├── gameConfig.ts             # TOUS les réglages de gameplay
 │   ├── math.ts                   # vecteurs, wrap, collisions, ids
-│   ├── highScores.ts             # persistance AsyncStorage
+│   ├── highScores.ts             # classement local (AsyncStorage) + en ligne
+│   ├── supabase.ts               # client Supabase, null si non configuré
 │   └── asteroidsSounds.ts        # sons synthétisés (Web Audio / expo-audio)
 └── assets/
     ├── images/asteroids/         # sprite sheet + planche annotée
@@ -71,6 +73,25 @@ Chaque jeu suit le même découpage :
 
 Le terrain de jeu fait toujours 360 × 560 unités logiques ; l'écran met à
 l'échelle. Les positions sont donc indépendantes de la taille de l'appareil.
+
+## Classement en ligne
+
+Les high scores sont écrits **deux fois** : dans `AsyncStorage` (classement du
+téléphone, disponible hors ligne) et dans une table Supabase (classement
+partagé). L'écran des scores propose les deux onglets. Si le réseau est absent
+ou Supabase injoignable, l'onglet « En ligne » le dit et le jeu continue de
+fonctionner normalement — rien de tout ça n'est bloquant.
+
+La configuration est dans `app.json` → `expo.extra.supabase`, pas dans un
+`.env` : la clé *publishable* est inlinée dans le bundle et donc publique de
+toute façon. Ce qui protège la table, c'est **RLS** (`supabase/migrations/`) :
+lecture et insertion ouvertes à tous, modification et suppression interdites, et
+des contraintes `CHECK` sur le jeu, les initiales et le score. Les variables
+`EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` sont
+prioritaires si on veut viser un autre projet le temps d'un test.
+
+Appliquer une migration : coller le fichier `supabase/migrations/*.sql` dans le
+SQL Editor du dashboard Supabase.
 
 ## Sons
 

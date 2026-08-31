@@ -46,6 +46,10 @@
       "router": {},
       "eas": {
         "projectId": "40373d0b-f784-425b-a19f-2800954daeb5"
+      },
+      "supabase": {
+        "url": "https://wcleoopxtczhmxmycpvj.supabase.co",
+        "publishableKey": "sb_publishable_NR370-kFAhKx8YLn1zsG3Q_knKLWk-F"
       }
     },
     "runtimeVersion": {

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 
 import { ArcadeButton } from '../components/ArcadeButton';
 import { AsteroidsControls } from '../components/TouchPad';
+import { HighScorePrompt } from '../components/HighScorePrompt';
 import { AsteroidsSprite, type AsteroidsSpriteKey } from '../components/AsteroidsSprite';
 import { ASTEROIDS_DIMENSIONS, useAsteroidsGame } from '../games/asteroids/useAsteroidsGame';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
@@ -29,8 +30,8 @@ export function AsteroidsGameScreen({
   onScores: () => void;
 }): React.ReactElement {
   const { state, controls } = useAsteroidsGame();
-  const [initials, setInitials] = useState<string>('AAA');
   const [askName, setAskName] = useState<boolean>(false);
+  const [saving, setSaving] = useState<boolean>(false);
   const [stageSize, setStageSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
 
   const soundsRef = useRef<ReturnType<typeof getAsteroidsSounds> | null>(null);
@@ -122,15 +123,16 @@ export function AsteroidsGameScreen({
     }
   }, [state.status, state.score]);
 
-  const submit = async (): Promise<void> => {
-    await saveHighScore('asteroids', {
-      initials: initials.slice(0, 3).toUpperCase(),
-      score: state.score,
-      date: Date.now(),
-    });
-    setAskName(false);
-    onScores();
-  };
+  const submit = useCallback(
+    async (initials: string): Promise<void> => {
+      setSaving(true);
+      await saveHighScore('asteroids', { initials, score: state.score, date: Date.now() });
+      setSaving(false);
+      setAskName(false);
+      onScores();
+    },
+    [state.score, onScores],
+  );
 
   // --- Wrap controls to drive sounds ---
   const thrustActiveRef = useRef(false);
@@ -312,21 +314,12 @@ export function AsteroidsGameScreen({
         {DEBUG_SFX && <ArcadeButton label="Test SFX" onPress={onTestSfx} variant="ghost" />}
       </View>
 
-      <Modal transparent visible={askName} onRequestClose={() => setAskName(false)}>
-        <View style={styles.modal}>
-          <View style={styles.card}>
-            <Text style={styles.overTitle}>Nouveau high score</Text>
-            <TextInput
-              value={initials}
-              onChangeText={setInitials}
-              maxLength={3}
-              autoCapitalize="characters"
-              style={styles.input}
-            />
-            <ArcadeButton label="Enregistrer" onPress={() => void submit()} />
-          </View>
-        </View>
-      </Modal>
+      <HighScorePrompt
+        visible={askName}
+        saving={saving}
+        onSubmit={(initials) => void submit(initials)}
+        onDismiss={() => setAskName(false)}
+      />
     </View>
   );
 }
@@ -377,31 +370,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '900',
     fontSize: 28,
-    textAlign: 'center',
-  },
-  modal: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    backgroundColor: '#071426',
-    padding: 24,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#72fbff',
-    gap: 16,
-    alignItems: 'center',
-  },
-  input: {
-    color: '#fff',
-    borderBottomWidth: 2,
-    borderColor: '#ffe083',
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: 8,
-    minWidth: 130,
     textAlign: 'center',
   },
 });
