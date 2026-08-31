@@ -2,15 +2,27 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { ArcadeButton } from '../components/ArcadeButton';
 
-export function GameMenuScreen({ title, icon, onPlay, onScores, onBack, secondaryVariant = 'ghost' }: { title: string; icon: React.ReactNode; onPlay: () => void; onScores: () => void; onBack: () => void; secondaryVariant?: 'primary' | 'ghost' }): React.ReactElement {
+export function GameMenuScreen({
+  title,
+  icon,
+  onPlay,
+  onScores,
+  onBack,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  onPlay: () => void;
+  onScores: () => void;
+  onBack: () => void;
+}): React.ReactElement {
   return (
     <View style={styles.container}>
       <View style={styles.badge}>{icon}</View>
       <Text style={styles.title}>{title}</Text>
       <View style={styles.panel}>
         <ArcadeButton label="Jouer" onPress={onPlay} />
-        <ArcadeButton label="High scores" onPress={onScores} variant={secondaryVariant} />
-        <ArcadeButton label="Retour au hub" onPress={onBack} variant={secondaryVariant} />
+        <ArcadeButton label="High scores" onPress={onScores} variant="ghost" />
+        <ArcadeButton label="Retour au hub" onPress={onBack} variant="ghost" />
       </View>
     </View>
   );

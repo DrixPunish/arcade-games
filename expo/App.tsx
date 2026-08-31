@@ -36,7 +36,6 @@ function renderRoute(route: Route, go: (next: Route) => void): React.ReactElemen
           onPlay={() => go('asteroidsGame')}
           onScores={() => go('asteroidsScores')}
           onBack={() => go('hub')}
-          secondaryVariant="primary"
         />
       );
     case 'invadersMenu':
@@ -51,12 +50,7 @@ function renderRoute(route: Route, go: (next: Route) => void): React.ReactElemen
       );
     case 'asteroidsScores':
       return (
-        <HighScoresScreen
-          game="asteroids"
-          title="Asteroids"
-          onBack={() => go('asteroidsMenu')}
-          backVariant="primary"
-        />
+        <HighScoresScreen game="asteroids" title="Asteroids" onBack={() => go('asteroidsMenu')} />
       );
     case 'invadersScores':
       return (

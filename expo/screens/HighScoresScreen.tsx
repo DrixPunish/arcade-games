@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ArcadeButton, ArcadeButtonVariant } from '../components/ArcadeButton';
+import { ArcadeButton } from '../components/ArcadeButton';
 import { CONFIG } from '../lib/gameConfig';
 import {
   Board,
@@ -16,12 +16,10 @@ export function HighScoresScreen({
   game,
   title,
   onBack,
-  backVariant = 'ghost',
 }: {
   game: GameId;
   title: string;
   onBack: () => void;
-  backVariant?: ArcadeButtonVariant;
 }): React.ReactElement {
   const [board, setBoard] = useState<Board>(isOnlineEnabled ? 'online' : 'local');
   const [scores, setScores] = useState<HighScoreEntry[]>([]);
@@ -95,7 +93,7 @@ export function HighScoresScreen({
       ) : null}
 
       <View style={styles.board}>{renderBody()}</View>
-      <ArcadeButton label="Retour" onPress={onBack} variant={backVariant} />
+      <ArcadeButton label="Retour" onPress={onBack} variant="ghost" />
     </View>
   );
 }
