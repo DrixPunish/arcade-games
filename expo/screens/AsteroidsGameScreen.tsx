@@ -203,7 +203,7 @@ export function AsteroidsGameScreen({
       <View style={styles.hud}>
         <Text style={styles.hudText}>Score {state.score}</Text>
         <Text style={styles.hudText}>Vies {state.lives}</Text>
-        <Text style={styles.hudText}>Level {state.level}</Text>
+        <Text style={styles.hudText}>Niveau {state.level}</Text>
       </View>
 
       <View style={styles.stage} onLayout={onStageLayout}>
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: '#04070f',
     borderWidth: 1,
     borderColor: 'rgba(98,246,255,0.28)',
   },

@@ -28,8 +28,9 @@ const H = 560;
 const SAUCER_EXIT = 40;
 const SAUCER_RADIUS = 18;
 
+// Progression de la borne : +2 par niveau jusqu'au plafond de 11.
 const asteroidCount = (level: number): number =>
-  level === 1 ? 4 : level === 2 ? 5 : level === 3 ? 7 : level === 4 ? 9 : 11;
+  level === 1 ? 4 : level === 2 ? 6 : level === 3 ? 8 : level === 4 ? 10 : 11;
 
 const baseShip = (): Ship => ({
   x: W / 2,
@@ -121,7 +122,7 @@ export function useAsteroidsGame(): {
 } {
   const [state, setState] = useState<AsteroidsState>(initial);
   const input = useRef({ l: false, r: false, t: false });
-  const largeDestroyed = useRef(0);
+  const saucerTimer = useRef<number>(CONFIG.asteroids.saucerDelay);
   const extraLivesGiven = useRef(0);
 
   const beginDeath = (n: AsteroidsState): void => {
@@ -214,9 +215,11 @@ export function useAsteroidsGame(): {
           sc.fire -= dt;
           if (sc.fire <= 0) {
             sc.fire = CONFIG.asteroids.saucerFireEvery;
+            // La petite soucoupe devient nettement plus précise en fin de partie.
+            const spread = n.score >= CONFIG.asteroids.saucerAccurateScore ? 0.12 : 0.35;
             const aim =
               sc.kind === 'small'
-                ? Math.atan2(n.ship.y - sc.y, n.ship.x - sc.x) + (Math.random() - 0.5) * 0.35
+                ? Math.atan2(n.ship.y - sc.y, n.ship.x - sc.x) + (Math.random() - 0.5) * spread
                 : Math.random() * Math.PI * 2;
             n.bullets.push({
               id: uid('ebullet'),
@@ -232,12 +235,17 @@ export function useAsteroidsGame(): {
         // Une soucoupe qui a fini sa traversée quitte le terrain.
         n.saucers = n.saucers.filter((sc) => sc.x > -SAUCER_EXIT && sc.x < W + SAUCER_EXIT);
 
-        if (
-          n.saucers.length === 0 &&
-          largeDestroyed.current >= CONFIG.asteroids.largeSaucerLargeAsteroids
-        ) {
-          largeDestroyed.current = 0;
-          n.saucers.push(spawnSaucer(n.score >= CONFIG.asteroids.smallSaucerScore ? 'small' : 'large'));
+        if (n.saucers.length === 0) {
+          saucerTimer.current -= dt;
+          if (saucerTimer.current <= 0) {
+            saucerTimer.current = Math.max(
+              CONFIG.asteroids.saucerDelayMin,
+              CONFIG.asteroids.saucerDelay - n.level * CONFIG.asteroids.saucerDelayPerLevel,
+            );
+            n.saucers.push(
+              spawnSaucer(n.score >= CONFIG.asteroids.smallSaucerScore ? 'small' : 'large'),
+            );
+          }
         }
 
         // --- Tirs du joueur sur les astéroïdes ---
@@ -248,7 +256,6 @@ export function useAsteroidsGame(): {
           if (!hit) return true;
           n.asteroids = n.asteroids.filter((a) => a.id !== hit.id);
           n.score += points(hit.size);
-          if (hit.size === 'large') largeDestroyed.current += 1;
           if (hit.size !== 'small') {
             const ns: Size = hit.size === 'large' ? 'medium' : 'small';
             const r = ns === 'medium' ? 20 : 11;
@@ -339,15 +346,24 @@ export function useAsteroidsGame(): {
             ],
           };
         }),
+      // L'hyperespace est un pari : sur la borne, une réapparition sur quatre
+      // se solde par la destruction du vaisseau.
       hyperspace: () =>
-        setState((s) =>
-          s.status !== 'running' || s.death.active
-            ? s
-            : {
-                ...s,
-                ship: { ...s.ship, x: Math.random() * W, y: Math.random() * H, invincible: 0.6 },
-              },
-        ),
+        setState((s) => {
+          if (s.status !== 'running' || s.death.active) return s;
+          const n: AsteroidsState = {
+            ...s,
+            ship: { ...s.ship },
+            death: { ...s.death },
+            bullets: [...s.bullets],
+          };
+          if (Math.random() < CONFIG.asteroids.hyperspaceRisk) {
+            beginDeath(n);
+            return n;
+          }
+          n.ship = { ...n.ship, x: Math.random() * W, y: Math.random() * H, invincible: 0.6 };
+          return n;
+        }),
       pause: () =>
         setState((s) => ({
           ...s,
@@ -359,7 +375,7 @@ export function useAsteroidsGame(): {
                 : s.status,
         })),
       restart: () => {
-        largeDestroyed.current = 0;
+        saucerTimer.current = CONFIG.asteroids.saucerDelay;
         extraLivesGiven.current = 0;
         input.current = { l: false, r: false, t: false };
         setState(initial());

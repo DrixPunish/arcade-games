@@ -13,8 +13,17 @@ export const CONFIG = {
     extraLifeEvery: 10000,
     /** Au-dessus de ce score, les soucoupes qui apparaissent sont les petites (celles qui visent). */
     smallSaucerScore: 10000,
-    /** Nombre de gros astéroïdes à détruire avant qu'une soucoupe ne se pointe. */
-    largeSaucerLargeAsteroids: 12,
+    /**
+     * La soucoupe arrive sur un minuteur qui se raccourcit au fil des niveaux,
+     * comme sur la borne — et non après un quota d'astéroïdes détruits.
+     */
+    saucerDelay: 18,
+    saucerDelayPerLevel: 1.5,
+    saucerDelayMin: 8,
+    /** Au-delà de ce score, la petite soucoupe tire beaucoup plus juste. */
+    saucerAccurateScore: 35000,
+    /** Risque que l'hyperespace détruise le vaisseau (borne : 8 chances sur 32). */
+    hyperspaceRisk: 0.25,
     asteroidSpawnSafeRadius: 120,
     deathAnimation: 0.85,
     finalDeathAnimation: 1.35,
@@ -36,11 +45,18 @@ export const CONFIG = {
     playerAccelTime: 0.5,
     bulletSpeed: 430,
     enemyBulletSpeed: 210,
-    maxEnemyBullets: 4,
+    maxEnemyBullets: 3,
     bunkerRows: 3,
     bunkerCols: 7,
     bunkerCount: 4,
-    ufoPoints: 100,
+    /**
+     * Le score de la soucoupe suit une séquence indexée sur le nombre de tirs
+     * du joueur depuis le début de la vague : c'est ce qui rend la soucoupe à
+     * 300 points atteignable au 23e tir puis tous les 15.
+     */
+    ufoPoints: [50, 50, 100, 150, 100, 100, 50, 300, 100, 100, 100, 50, 150, 100, 100],
+    /** Vie bonus unique, au premier passage de ce score. */
+    bonusLifeAt: 1500,
     /** Invincibilité après avoir perdu une vie (secondes). */
     respawnInvincible: 1.5,
   },

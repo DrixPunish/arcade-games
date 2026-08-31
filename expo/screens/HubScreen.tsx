@@ -21,7 +21,7 @@ export function HubScreen({
       <Text style={styles.kicker}>INSERT COIN</Text>
       <Text style={styles.title}>Arcade Games</Text>
       <Text style={styles.subtitle}>
-        Trois bornes. Deux classiques jouables. Une base prête pour vos futurs sprites.
+        Trois bornes. Deux classiques jouables, sprites d’époque et classement en ligne.
       </Text>
       <View style={[styles.grid, compact && styles.gridCompact]}>
         <GameOrb

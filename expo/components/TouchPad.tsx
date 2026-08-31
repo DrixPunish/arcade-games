@@ -226,14 +226,14 @@ function VisualButton({
 
 const ASTEROIDS_ROWS: PadRow[] = [
   [
-    { key: 'rotateLeft', label: 'Rotate Left', mode: 'hold' },
-    { key: 'thrust', label: 'Thrust', mode: 'hold' },
+    { key: 'rotateLeft', label: 'Rotation ←', mode: 'hold' },
+    { key: 'thrust', label: 'Propulsion', mode: 'hold' },
   ],
   [
-    { key: 'rotateRight', label: 'Rotate Right', mode: 'hold' },
-    { key: 'fire', label: 'Fire', mode: 'tap' },
+    { key: 'rotateRight', label: 'Rotation →', mode: 'hold' },
+    { key: 'fire', label: 'Tirer', mode: 'tap' },
   ],
-  [{ key: 'hyperspace', label: 'Hyperspace', mode: 'tap' }],
+  [{ key: 'hyperspace', label: 'Hyperespace', mode: 'tap' }],
 ];
 
 export function AsteroidsControls({

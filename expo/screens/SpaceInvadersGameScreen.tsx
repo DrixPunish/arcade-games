@@ -1,45 +1,59 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Rect } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 
 import { ArcadeButton } from '../components/ArcadeButton';
 import { InvadersControls } from '../components/TouchPad';
 import { HighScorePrompt } from '../components/HighScorePrompt';
 import {
   BunkerBlock,
+  Explosion,
   INVADERS_DIMENSIONS,
   Invader,
   useSpaceInvadersGame,
 } from '../games/space-invaders/useSpaceInvadersGame';
+import {
+  CANNON,
+  EXPLOSION,
+  INVADER_SPRITES,
+  SAUCER,
+  spritePath,
+} from '../games/space-invaders/sprites';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 
 const D = INVADERS_DIMENSIONS;
 
+const INVADER_COLOR = { squid: '#ff7a9c', crab: '#ffe083', octopus: '#72fbff' } as const;
+
 /**
- * Les ~55 envahisseurs et ~80 blocs de bunker ne bougent pas à chaque frame :
- * le moteur conserve la référence de leurs tableaux tant que rien ne change.
- * En les isolant derrière un memo, React ne rejoue ces 135 nœuds SVG que sur
- * les frames où ils bougent vraiment — le reste du temps seuls le joueur, les
- * tirs et l'OVNI sont redessinés.
+ * Les ~55 envahisseurs et les ~250 morceaux de bunker ne changent pas à chaque
+ * frame : le moteur conserve la référence de leurs tableaux tant que rien ne
+ * les touche. Isolés derrière un memo, ils ne sont retracés que sur les frames
+ * où ils bougent vraiment. Chaque envahisseur et chaque bunker est un unique
+ * `<Path>`, pas un nœud par pixel.
  */
 const Invaders = React.memo(function Invaders({
   invaders,
+  animFrame,
 }: {
   invaders: Invader[];
+  animFrame: 0 | 1;
 }): React.ReactElement {
   return (
     <>
       {invaders
         .filter((i) => i.alive)
         .map((i) => (
-          <Rect
+          <Path
             key={i.id}
-            x={i.x}
-            y={i.y}
-            width={D.INVADER_W}
-            height={D.INVADER_H}
-            rx={4}
-            fill={i.points === 30 ? '#ff7a9c' : i.points === 20 ? '#ffe083' : '#72fbff'}
+            d={spritePath(
+              INVADER_SPRITES[i.kind][animFrame],
+              i.x,
+              i.y,
+              D.INVADER_PIXEL,
+              D.INVADER_PIXEL,
+            )}
+            fill={INVADER_COLOR[i.kind]}
           />
         ))}
     </>
@@ -51,13 +65,37 @@ const Bunkers = React.memo(function Bunkers({
 }: {
   bunkers: BunkerBlock[];
 }): React.ReactElement {
+  // Un seul tracé pour tous les morceaux encore debout : quatre bunkers
+  // deviennent un nœud unique au lieu de ~250.
+  const d = useMemo(
+    () =>
+      bunkers
+        .filter((b) => b.alive)
+        .map(
+          (b) =>
+            `M${b.x} ${b.y}h${D.BUNKER_PIXEL}v${D.BUNKER_PIXEL}h${-D.BUNKER_PIXEL}z`,
+        )
+        .join(''),
+    [bunkers],
+  );
+  return <Path d={d} fill="#46e68c" />;
+});
+
+const Explosions = React.memo(function Explosions({
+  explosions,
+}: {
+  explosions: Explosion[];
+}): React.ReactElement {
   return (
     <>
-      {bunkers
-        .filter((b) => b.alive)
-        .map((b) => (
-          <Rect key={b.id} x={b.x} y={b.y} width={D.BLOCK - 1} height={D.BLOCK - 1} fill="#46e68c" />
-        ))}
+      {explosions.map((e) => (
+        <Path
+          key={e.id}
+          d={spritePath(EXPLOSION, e.x - 13, e.y - 8, 2, 2)}
+          fill="#fff2b0"
+          opacity={0.9}
+        />
+      ))}
     </>
   );
 });
@@ -95,7 +133,7 @@ export function SpaceInvadersGameScreen({
     [state.score, onScores],
   );
 
-  // Le joueur clignote pendant son invincibilité de réapparition.
+  // Le canon clignote pendant son invincibilité de réapparition.
   const playerVisible = state.invincible <= 0 || Math.floor(state.invincible * 10) % 2 === 0;
   const paused = state.status === 'paused';
 
@@ -104,53 +142,40 @@ export function SpaceInvadersGameScreen({
       <View style={styles.hud}>
         <Text style={styles.hudText}>Score {state.score}</Text>
         <Text style={styles.hudText}>Vies {state.lives}</Text>
-        <Text style={styles.hudText}>Wave {state.wave}</Text>
+        <Text style={styles.hudText}>Vague {state.wave}</Text>
       </View>
 
       <View style={styles.stage}>
         <Svg viewBox={`0 0 ${D.W} ${D.H}`} width="100%" height="100%">
-          <Rect
-            x={0}
-            y={0}
-            width={D.W}
-            height={D.H}
-            fill="rgba(0,0,0,0.25)"
-            stroke="#24536b"
-            strokeWidth={2}
-          />
+          <Rect x={0} y={0} width={D.W} height={D.H} fill="#04070f" />
 
           {state.ufo.active ? (
-            <Rect
-              x={state.ufo.x - D.UFO_W / 2}
-              y={state.ufo.y - D.UFO_H / 2}
-              width={D.UFO_W}
-              height={D.UFO_H}
-              rx={8}
+            <Path
+              d={spritePath(
+                SAUCER,
+                state.ufo.x - D.UFO_W / 2,
+                state.ufo.y - D.UFO_H / 2,
+                D.UFO_PIXEL,
+                D.UFO_PIXEL,
+              )}
               fill="#ff4778"
             />
           ) : null}
 
-          <Invaders invaders={state.invaders} />
+          <Invaders invaders={state.invaders} animFrame={state.animFrame} />
           <Bunkers bunkers={state.bunkers} />
 
           {playerVisible ? (
-            <>
-              <Rect
-                x={state.playerX - D.PLAYER_W / 2}
-                y={D.PLAYER_Y - D.PLAYER_H / 2}
-                width={D.PLAYER_W}
-                height={D.PLAYER_H}
-                rx={3}
-                fill="#eaffff"
-              />
-              <Rect
-                x={state.playerX - 4}
-                y={D.PLAYER_Y - D.PLAYER_H / 2 - 10}
-                width={8}
-                height={12}
-                fill="#eaffff"
-              />
-            </>
+            <Path
+              d={spritePath(
+                CANNON,
+                state.playerX - D.PLAYER_W / 2,
+                D.PLAYER_Y - D.PLAYER_H / 2,
+                D.PLAYER_PIXEL,
+                D.PLAYER_PIXEL,
+              )}
+              fill="#eaffff"
+            />
           ) : null}
 
           {state.playerBullet ? (
@@ -164,8 +189,20 @@ export function SpaceInvadersGameScreen({
           ) : null}
 
           {state.enemyBullets.map((b, i) => (
-            <Circle key={`enemy-bullet-${i}`} cx={b.x} cy={b.y} r={3} fill="#ffb000" />
+            <Rect
+              key={`enemy-bullet-${i}`}
+              x={b.x - D.BULLET_W / 2}
+              y={b.y}
+              width={D.BULLET_W}
+              height={D.BULLET_H}
+              fill="#ffb000"
+            />
           ))}
+
+          <Explosions explosions={state.explosions} />
+
+          {/* Sol : la ligne que les envahisseurs ne doivent pas atteindre. */}
+          <Rect x={0} y={D.PLAYER_Y + D.PLAYER_H} width={D.W} height={2} fill="#46e68c" />
         </Svg>
 
         {state.status !== 'running' ? (
@@ -180,11 +217,7 @@ export function SpaceInvadersGameScreen({
         ) : null}
       </View>
 
-      <InvadersControls
-        onLeft={controls.left}
-        onRight={controls.right}
-        onFire={controls.fire}
-      />
+      <InvadersControls onLeft={controls.left} onRight={controls.right} onFire={controls.fire} />
 
       <View style={styles.bottom}>
         <ArcadeButton label="Pause" onPress={controls.pause} fullWidth />
@@ -217,6 +250,8 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     borderRadius: 18,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(98,246,255,0.28)',
   },
   bottom: { width: '100%', maxWidth: 620, flexDirection: 'row' },
   overlay: {
