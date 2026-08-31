@@ -7,17 +7,25 @@ export function ArcadeButton({
   label,
   onPress,
   variant = 'primary',
+  fullWidth = false,
 }: {
   label: string;
   onPress: () => void;
   variant?: ArcadeButtonVariant;
+  /** Occupe toute la largeur disponible au lieu de la largeur minimale. */
+  fullWidth?: boolean;
 }): React.ReactElement {
   return (
     <TouchableOpacity
       activeOpacity={0.82}
       onPress={onPress}
       accessibilityRole="button"
-      style={[styles.button, variant === 'ghost' && styles.ghost, variant === 'danger' && styles.danger]}
+      style={[
+        styles.button,
+        variant === 'ghost' && styles.ghost,
+        variant === 'danger' && styles.danger,
+        fullWidth && styles.fullWidth,
+      ]}
     >
       <Text style={[styles.buttonText, variant === 'ghost' && styles.ghostText]}>{label}</Text>
     </TouchableOpacity>
@@ -58,4 +66,5 @@ const styles = StyleSheet.create({
   // Le fond ghost est sombre : le texte quasi noir des boutons pleins y serait
   // illisible (contraste 1,26:1).
   ghostText: { color: '#eaffff' },
+  fullWidth: { flex: 1 },
 });

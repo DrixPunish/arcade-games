@@ -24,11 +24,16 @@ export const CONFIG = {
     rows: 5,
     cols: 11,
     /**
-     * Unités/seconde sur un terrain large de 360. À 270 le canon traversait
-     * l'écran en 1,3 s : viser une colonne précise demandait de s'arrêter à
-     * deux frames près. À 180 on garde de la réactivité en gagnant en finesse.
+     * Le canon démarre lentement puis accélère tant qu'on maintient la flèche.
+     * Une tape brève ne doit décaler que de quelques unités — la largeur d'un
+     * envahisseur est de 18 et les colonnes sont espacées de 24, donc à vitesse
+     * constante il était impossible de s'aligner. Maintenu, on retrouve une
+     * vitesse de traversée normale.
      */
-    playerSpeed: 180,
+    playerSpeedStart: 70,
+    playerSpeed: 240,
+    /** Secondes de maintien pour passer de playerSpeedStart à playerSpeed. */
+    playerAccelTime: 0.5,
     bulletSpeed: 430,
     enemyBulletSpeed: 210,
     maxEnemyBullets: 4,

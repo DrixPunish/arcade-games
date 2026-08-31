@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   GestureResponderEvent,
   LayoutChangeEvent,
@@ -9,202 +9,139 @@ import {
   ViewStyle,
 } from 'react-native';
 
-type ControlKey = 'rotateLeft' | 'rotateRight' | 'thrust' | 'fire' | 'hyperspace';
+/**
+ * Pavé de contrôle multi-touch.
+ *
+ * Deux `Pressable` voisins ne peuvent pas être enfoncés en même temps : le
+ * système de responder de React Native attribue un geste à une seule vue. Or un
+ * jeu d'arcade a besoin qu'on tire *pendant* qu'on se déplace. Ce composant
+ * prend donc la main sur tout le pavé, mesure la position de chaque bouton en
+ * coordonnées page, et déduit lui-même des touches actives quels boutons sont
+ * enfoncés — autant à la fois qu'il y a de doigts.
+ */
+
+/** `hold` = actif tant que le doigt reste dessus. `tap` = déclenché à l'appui. */
+export type PadButtonMode = 'hold' | 'tap';
+export type PadButton = { key: string; label: string; mode: PadButtonMode; flex?: number };
+export type PadRow = PadButton[];
+
 type Rect = { x: number; y: number; width: number; height: number };
-type RectMap = Record<ControlKey, Rect | null>;
-type ActiveMap = Record<ControlKey, boolean>;
-
-type AsteroidsControlsProps = {
-  onRotateLeft: (active: boolean) => void;
-  onRotateRight: (active: boolean) => void;
-  onThrust: (active: boolean) => void;
-  onFire: () => void;
-  onHyperspace: () => void;
-  /** When true, draws the measured hitboxes as a translucent overlay for debugging. */
-  debugHitboxes?: boolean;
-};
-
-const KEYS: ControlKey[] = ['rotateLeft', 'rotateRight', 'thrust', 'fire', 'hyperspace'];
-
-const emptyRects = (): RectMap => ({
-  rotateLeft: null,
-  rotateRight: null,
-  thrust: null,
-  fire: null,
-  hyperspace: null,
-});
-
-const emptyActive = (): ActiveMap => ({
-  rotateLeft: false,
-  rotateRight: false,
-  thrust: false,
-  fire: false,
-  hyperspace: false,
-});
 
 const isInside = (x: number, y: number, r: Rect | null): boolean =>
   !!r && x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height;
 
-type VisualButtonProps = {
-  label: string;
-  active: boolean;
-  style?: StyleProp<ViewStyle>;
-  innerRef: (view: View | null) => void;
-  onLayout: (event: LayoutChangeEvent) => void;
-};
-
-function VisualButton({
-  label,
-  active,
-  style,
-  innerRef,
-  onLayout,
-}: VisualButtonProps): React.ReactElement {
-  return (
-    <View
-      ref={innerRef}
-      collapsable={false}
-      onLayout={onLayout}
-      pointerEvents="none"
-      style={[styles.control, style, active && styles.pressed]}
-    >
-      <Text style={styles.text}>{label}</Text>
-    </View>
-  );
-}
-
-export function AsteroidsControls({
-  onRotateLeft,
-  onRotateRight,
-  onThrust,
-  onFire,
-  onHyperspace,
+export function MultiTouchPad({
+  rows,
+  onHoldChange,
+  onTap,
   debugHitboxes = false,
-}: AsteroidsControlsProps): React.ReactElement {
+}: {
+  rows: PadRow[];
+  /** Appelé au changement d'état d'un bouton `hold`. */
+  onHoldChange: (key: string, active: boolean) => void;
+  /** Appelé une fois par appui sur un bouton `tap`. */
+  onTap: (key: string) => void;
+  /** Dessine les zones tactiles mesurées, pour mettre au point un réglage. */
+  debugHitboxes?: boolean;
+}): React.ReactElement {
+  const buttons = useMemo(() => rows.flat(), [rows]);
+  const keys = useMemo(() => buttons.map((b) => b.key), [buttons]);
+  const modes = useMemo(
+    () => Object.fromEntries(buttons.map((b) => [b.key, b.mode])) as Record<string, PadButtonMode>,
+    [buttons],
+  );
+
   const panelRef = useRef<View | null>(null);
-  const rectsRef = useRef<RectMap>(emptyRects());
-  const prevActiveRef = useRef<ActiveMap>(emptyActive());
-  const viewRefs = useRef<Record<ControlKey, View | null>>({
-    rotateLeft: null,
-    rotateRight: null,
-    thrust: null,
-    fire: null,
-    hyperspace: null,
-  });
-  const [active, setActive] = useState<ActiveMap>(emptyActive);
-  const [debugRects, setDebugRects] = useState<RectMap>(emptyRects());
-
-  // Measure every button in PAGE coordinates (pageX/pageY).
-  // Touches use pageX/pageY too so the coordinate systems match.
-  // This works on both native and web (no findNodeHandle).
   const panelOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const viewRefs = useRef<Record<string, View | null>>({});
+  const rectsRef = useRef<Record<string, Rect | null>>({});
+  const prevActiveRef = useRef<Record<string, boolean>>({});
+  const [active, setActive] = useState<Record<string, boolean>>({});
+  const [debugRects, setDebugRects] = useState<Record<string, Rect | null>>({});
 
-  const measureKey = useCallback((key: ControlKey): void => {
-    const node = viewRefs.current[key];
-    if (!node) return;
-    try {
-      node.measure((_x, _y, width, height, pageX, pageY) => {
-        if (width > 0 && height > 0) {
-          const rect = { x: pageX, y: pageY, width, height };
-          rectsRef.current[key] = rect;
-          if (debugHitboxes) {
-            setDebugRects((prev) => ({ ...prev, [key]: rect }));
+  const measureKey = useCallback(
+    (key: string): void => {
+      const node = viewRefs.current[key];
+      if (!node) return;
+      try {
+        node.measure((_x, _y, width, height, pageX, pageY) => {
+          if (width > 0 && height > 0) {
+            const rect = { x: pageX, y: pageY, width, height };
+            rectsRef.current[key] = rect;
+            if (debugHitboxes) setDebugRects((prev) => ({ ...prev, [key]: rect }));
           }
-        }
-      });
-    } catch {
-      // ignore
-    }
-  }, [debugHitboxes]);
+        });
+      } catch {
+        // ignore
+      }
+    },
+    [debugHitboxes],
+  );
 
-  const measurePanel = useCallback((): void => {
-    const panel = panelRef.current;
-    if (!panel) return;
+  const measureAll = useCallback((): void => {
     try {
-      panel.measure((_x, _y, _w, _h, pageX, pageY) => {
+      panelRef.current?.measure((_x, _y, _w, _h, pageX, pageY) => {
         panelOriginRef.current = { x: pageX, y: pageY };
       });
     } catch {
       // ignore
     }
-  }, []);
-
-  const measureAll = useCallback((): void => {
-    measurePanel();
-    KEYS.forEach(measureKey);
-  }, [measureKey, measurePanel]);
+    keys.forEach(measureKey);
+  }, [keys, measureKey]);
 
   useEffect(() => {
-    // Re-measure a few times to catch async layout settling.
-    const t1 = setTimeout(measureAll, 0);
-    const t2 = setTimeout(measureAll, 80);
-    const t3 = setTimeout(measureAll, 250);
-    const t4 = setTimeout(measureAll, 600);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-    };
+    // Plusieurs mesures : la mise en page se stabilise de façon asynchrone.
+    const timers = [0, 80, 250, 600].map((d) => setTimeout(measureAll, d));
+    return () => timers.forEach(clearTimeout);
   }, [measureAll]);
 
   const setRef = useCallback(
-    (key: ControlKey) => (view: View | null) => {
+    (key: string) => (view: View | null) => {
       viewRefs.current[key] = view;
     },
     [],
   );
 
-  const onButtonLayout = useCallback(
-    (key: ControlKey) => () => {
-      measureKey(key);
-    },
-    [measureKey],
-  );
-
   const sync = useCallback(
-    (next: ActiveMap): void => {
+    (next: Record<string, boolean>): void => {
       const prev = prevActiveRef.current;
-      if (next.rotateLeft !== prev.rotateLeft) onRotateLeft(next.rotateLeft);
-      if (next.rotateRight !== prev.rotateRight) onRotateRight(next.rotateRight);
-      if (next.thrust !== prev.thrust) onThrust(next.thrust);
-      if (next.fire && !prev.fire) onFire();
-      if (next.hyperspace && !prev.hyperspace) onHyperspace();
+      for (const key of keys) {
+        const was = prev[key] === true;
+        const now = next[key] === true;
+        if (modes[key] === 'hold') {
+          if (now !== was) onHoldChange(key, now);
+        } else if (now && !was) {
+          onTap(key);
+        }
+      }
       prevActiveRef.current = next;
       setActive(next);
     },
-    [onRotateLeft, onRotateRight, onThrust, onFire, onHyperspace],
+    [keys, modes, onHoldChange, onTap],
   );
 
   const handleTouches = useCallback(
     (event: GestureResponderEvent): void => {
-      const touches = event.nativeEvent.touches;
-      const next = emptyActive();
-      const rects = rectsRef.current;
-      for (const touch of touches) {
-        // Use pageX/pageY: same coordinate system as rects measured via measure().
-        const lx = touch.pageX;
-        const ly = touch.pageY;
-        if (isInside(lx, ly, rects.rotateLeft)) next.rotateLeft = true;
-        if (isInside(lx, ly, rects.rotateRight)) next.rotateRight = true;
-        if (isInside(lx, ly, rects.thrust)) next.thrust = true;
-        if (isInside(lx, ly, rects.fire)) next.fire = true;
-        if (isInside(lx, ly, rects.hyperspace)) next.hyperspace = true;
+      const next: Record<string, boolean> = {};
+      // pageX/pageY : même repère que les rectangles mesurés via measure().
+      for (const touch of event.nativeEvent.touches) {
+        for (const key of keys) {
+          if (isInside(touch.pageX, touch.pageY, rectsRef.current[key] ?? null)) next[key] = true;
+        }
       }
       sync(next);
     },
-    [sync],
+    [keys, sync],
   );
 
   const releaseAll = useCallback((): void => {
     const prev = prevActiveRef.current;
-    if (prev.rotateLeft) onRotateLeft(false);
-    if (prev.rotateRight) onRotateRight(false);
-    if (prev.thrust) onThrust(false);
-    const cleared = emptyActive();
-    prevActiveRef.current = cleared;
-    setActive(cleared);
-  }, [onRotateLeft, onRotateRight, onThrust]);
+    for (const key of keys) {
+      if (prev[key] && modes[key] === 'hold') onHoldChange(key, false);
+    }
+    prevActiveRef.current = {};
+    setActive({});
+  }, [keys, modes, onHoldChange]);
 
   return (
     <View
@@ -222,92 +159,170 @@ export function AsteroidsControls({
       onResponderRelease={handleTouches}
       onResponderTerminate={releaseAll}
     >
-      <View style={styles.row} onLayout={measureAll}>
-        <VisualButton
-          label="Rotate Left"
-          active={active.rotateLeft}
-          style={styles.buttonHalf}
-          innerRef={setRef('rotateLeft')}
-          onLayout={onButtonLayout('rotateLeft')}
-        />
-        <VisualButton
-          label="Thrust"
-          active={active.thrust}
-          style={styles.buttonHalf}
-          innerRef={setRef('thrust')}
-          onLayout={onButtonLayout('thrust')}
-        />
-      </View>
+      {rows.map((row, rowIndex) => (
+        <View key={`row-${rowIndex}`} style={styles.row} onLayout={measureAll}>
+          {row.map((button) => (
+            <VisualButton
+              key={button.key}
+              label={button.label}
+              active={active[button.key] === true}
+              style={{ flex: button.flex ?? 1 }}
+              innerRef={setRef(button.key)}
+              onLayout={() => measureKey(button.key)}
+            />
+          ))}
+        </View>
+      ))}
 
-      <View style={styles.row} onLayout={measureAll}>
-        <VisualButton
-          label="Rotate Right"
-          active={active.rotateRight}
-          style={styles.buttonHalf}
-          innerRef={setRef('rotateRight')}
-          onLayout={onButtonLayout('rotateRight')}
-        />
-        <VisualButton
-          label="Fire"
-          active={active.fire}
-          style={styles.buttonHalf}
-          innerRef={setRef('fire')}
-          onLayout={onButtonLayout('fire')}
-        />
-      </View>
-
-      <View style={styles.row} onLayout={measureAll}>
-        <VisualButton
-          label="Hyperspace"
-          active={active.hyperspace}
-          style={styles.buttonFull}
-          innerRef={setRef('hyperspace')}
-          onLayout={onButtonLayout('hyperspace')}
-        />
-      </View>
-
-      {debugHitboxes && (
+      {debugHitboxes ? (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          {KEYS.map((key) => {
+          {keys.map((key) => {
             const r = debugRects[key];
             if (!r) return null;
             const origin = panelOriginRef.current;
             return (
               <View
                 key={`debug-${key}`}
-                style={{
-                  position: 'absolute',
-                  left: r.x - origin.x,
-                  top: r.y - origin.y,
-                  width: r.width,
-                  height: r.height,
-                  borderWidth: 2,
-                  borderColor: 'rgba(255,71,120,0.95)',
-                  backgroundColor: 'rgba(255,71,120,0.18)',
-                  borderRadius: 18,
-                }}
+                style={[
+                  styles.debugBox,
+                  { left: r.x - origin.x, top: r.y - origin.y, width: r.width, height: r.height },
+                ]}
               />
             );
           })}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
 
+function VisualButton({
+  label,
+  active,
+  style,
+  innerRef,
+  onLayout,
+}: {
+  label: string;
+  active: boolean;
+  style?: StyleProp<ViewStyle>;
+  innerRef: (view: View | null) => void;
+  onLayout: (event: LayoutChangeEvent) => void;
+}): React.ReactElement {
+  return (
+    <View
+      ref={innerRef}
+      collapsable={false}
+      onLayout={onLayout}
+      pointerEvents="none"
+      style={[styles.control, style, active && styles.pressed]}
+    >
+      <Text style={styles.text}>{label}</Text>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------- Asteroids -- */
+
+const ASTEROIDS_ROWS: PadRow[] = [
+  [
+    { key: 'rotateLeft', label: 'Rotate Left', mode: 'hold' },
+    { key: 'thrust', label: 'Thrust', mode: 'hold' },
+  ],
+  [
+    { key: 'rotateRight', label: 'Rotate Right', mode: 'hold' },
+    { key: 'fire', label: 'Fire', mode: 'tap' },
+  ],
+  [{ key: 'hyperspace', label: 'Hyperspace', mode: 'tap' }],
+];
+
+export function AsteroidsControls({
+  onRotateLeft,
+  onRotateRight,
+  onThrust,
+  onFire,
+  onHyperspace,
+  debugHitboxes,
+}: {
+  onRotateLeft: (active: boolean) => void;
+  onRotateRight: (active: boolean) => void;
+  onThrust: (active: boolean) => void;
+  onFire: () => void;
+  onHyperspace: () => void;
+  debugHitboxes?: boolean;
+}): React.ReactElement {
+  const onHoldChange = useCallback(
+    (key: string, activeNow: boolean): void => {
+      if (key === 'rotateLeft') onRotateLeft(activeNow);
+      else if (key === 'rotateRight') onRotateRight(activeNow);
+      else if (key === 'thrust') onThrust(activeNow);
+    },
+    [onRotateLeft, onRotateRight, onThrust],
+  );
+  const onTap = useCallback(
+    (key: string): void => {
+      if (key === 'fire') onFire();
+      else if (key === 'hyperspace') onHyperspace();
+    },
+    [onFire, onHyperspace],
+  );
+  return (
+    <MultiTouchPad
+      rows={ASTEROIDS_ROWS}
+      onHoldChange={onHoldChange}
+      onTap={onTap}
+      debugHitboxes={debugHitboxes}
+    />
+  );
+}
+
+/* -------------------------------------------------------- Space Invaders -- */
+
+const INVADERS_ROWS: PadRow[] = [
+  [
+    { key: 'left', label: '←', mode: 'hold' },
+    { key: 'right', label: '→', mode: 'hold' },
+    { key: 'fire', label: 'Tirer', mode: 'tap', flex: 1.4 },
+  ],
+];
+
+export function InvadersControls({
+  onLeft,
+  onRight,
+  onFire,
+  debugHitboxes,
+}: {
+  onLeft: (active: boolean) => void;
+  onRight: (active: boolean) => void;
+  onFire: () => void;
+  debugHitboxes?: boolean;
+}): React.ReactElement {
+  const onHoldChange = useCallback(
+    (key: string, activeNow: boolean): void => {
+      if (key === 'left') onLeft(activeNow);
+      else if (key === 'right') onRight(activeNow);
+    },
+    [onLeft, onRight],
+  );
+  const onTap = useCallback(
+    (key: string): void => {
+      if (key === 'fire') onFire();
+    },
+    [onFire],
+  );
+  return (
+    <MultiTouchPad
+      rows={INVADERS_ROWS}
+      onHoldChange={onHoldChange}
+      onTap={onTap}
+      debugHitboxes={debugHitboxes}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
-  panel: {
-    width: '100%',
-    maxWidth: 620,
-    gap: 10,
-    marginTop: 8,
-    marginBottom: 10,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-  },
+  panel: { width: '100%', maxWidth: 620, gap: 10, marginTop: 8, marginBottom: 10 },
+  row: { flexDirection: 'row', gap: 10, width: '100%' },
   control: {
     minHeight: 60,
     borderRadius: 18,
@@ -319,20 +334,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  buttonHalf: {
-    flex: 1,
-  },
-  buttonFull: {
-    flex: 1,
-  },
-  pressed: {
-    transform: [{ scale: 0.98 }],
-    backgroundColor: 'rgba(98,246,255,0.28)',
-  },
-  text: {
-    color: '#ecfeff',
-    fontWeight: '900',
-    fontSize: 14,
-    textAlign: 'center',
+  pressed: { transform: [{ scale: 0.98 }], backgroundColor: 'rgba(98,246,255,0.28)' },
+  text: { color: '#ecfeff', fontWeight: '900', fontSize: 14, textAlign: 'center' },
+  debugBox: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: 'rgba(255,71,120,0.95)',
+    backgroundColor: 'rgba(255,71,120,0.18)',
+    borderRadius: 18,
   },
 });

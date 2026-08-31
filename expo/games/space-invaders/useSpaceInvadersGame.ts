@@ -99,6 +99,8 @@ export function useSpaceInvadersGame(): {
 } {
   const [state, setState] = useState<InvadersState>(initial);
   const move = useRef({ left: false, right: false });
+  /** Durée de maintien de la direction en cours, pour la rampe d'accélération. */
+  const hold = useRef({ dir: 0, time: 0 });
   const timers = useRef({ step: 0, fire: 0, ufo: 0 });
   const dir = useRef<1 | -1>(1);
 
@@ -131,13 +133,15 @@ export function useSpaceInvadersGame(): {
           bunkers = bunkers.map((b, i) => (i === index ? { ...b, alive: false } : b));
         };
 
-        // --- Joueur ---
+        // --- Joueur : vitesse qui monte avec la durée du maintien ---
         const vx = (move.current.right ? 1 : 0) - (move.current.left ? 1 : 0);
-        const playerX = clamp(
-          s.playerX + vx * CONFIG.invaders.playerSpeed * dt,
-          PLAYER_W / 2,
-          W - PLAYER_W / 2,
-        );
+        if (vx === 0 || vx !== hold.current.dir) hold.current = { dir: vx, time: 0 };
+        else hold.current.time += dt;
+        const ramp = Math.min(1, hold.current.time / CONFIG.invaders.playerAccelTime);
+        const speed =
+          CONFIG.invaders.playerSpeedStart +
+          (CONFIG.invaders.playerSpeed - CONFIG.invaders.playerSpeedStart) * ramp;
+        const playerX = clamp(s.playerX + vx * speed * dt, PLAYER_W / 2, W - PLAYER_W / 2);
 
         // --- Projectiles ---
         if (playerBullet) {
@@ -323,6 +327,7 @@ export function useSpaceInvadersGame(): {
         })),
       restart: () => {
         move.current = { left: false, right: false };
+        hold.current = { dir: 0, time: 0 };
         resetWaveTimers();
         setState(initial());
       },

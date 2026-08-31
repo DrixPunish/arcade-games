@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Rect } from 'react-native-svg';
 
 import { ArcadeButton } from '../components/ArcadeButton';
-import { ControlButton } from '../components/ControlButton';
+import { InvadersControls } from '../components/TouchPad';
 import { HighScorePrompt } from '../components/HighScorePrompt';
 import {
   BunkerBlock,
@@ -180,15 +180,15 @@ export function SpaceInvadersGameScreen({
         ) : null}
       </View>
 
-      <View style={styles.controls}>
-        <View style={styles.row}>
-          <ControlButton label="←" onDown={() => controls.left(true)} onUp={() => controls.left(false)} />
-          <ControlButton label="→" onDown={() => controls.right(true)} onUp={() => controls.right(false)} />
-        </View>
-        <ControlButton label="Tirer" onPress={controls.fire} wide />
-      </View>
+      <InvadersControls
+        onLeft={controls.left}
+        onRight={controls.right}
+        onFire={controls.fire}
+      />
 
-      <ArcadeButton label="Pause" onPress={controls.pause} />
+      <View style={styles.bottom}>
+        <ArcadeButton label="Pause" onPress={controls.pause} fullWidth />
+      </View>
 
       <HighScorePrompt
         visible={askName}
@@ -218,15 +218,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
   },
-  controls: {
-    width: '100%',
-    maxWidth: 620,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  row: { flexDirection: 'row' },
+  bottom: { width: '100%', maxWidth: 620, flexDirection: 'row' },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

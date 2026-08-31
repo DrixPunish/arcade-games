@@ -310,7 +310,7 @@ export function AsteroidsGameScreen({
       />
 
       <View style={styles.bottom}>
-        <ArcadeButton label="Pause" onPress={controls.pause} />
+        <ArcadeButton label="Pause" onPress={controls.pause} fullWidth />
         {DEBUG_SFX && <ArcadeButton label="Test SFX" onPress={onTestSfx} variant="ghost" />}
       </View>
 
