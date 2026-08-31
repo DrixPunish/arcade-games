@@ -296,6 +296,7 @@ export function AsteroidsGameScreen({
               label={state.status === 'paused' ? 'Reprendre' : 'Rejouer'}
               onPress={state.status === 'paused' ? controls.pause : controls.restart}
             />
+            <ArcadeButton label="Quitter" onPress={onExit} variant="ghost" />
           </View>
         )}
       </View>
@@ -310,7 +311,6 @@ export function AsteroidsGameScreen({
 
       <View style={styles.bottom}>
         <ArcadeButton label="Pause" onPress={controls.pause} />
-        <ArcadeButton label="Quitter" onPress={onExit} variant="ghost" />
         {DEBUG_SFX && <ArcadeButton label="Test SFX" onPress={onTestSfx} variant="ghost" />}
       </View>
 

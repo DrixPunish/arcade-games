@@ -5,10 +5,62 @@ import Svg, { Circle, Rect } from 'react-native-svg';
 import { ArcadeButton } from '../components/ArcadeButton';
 import { ControlButton } from '../components/ControlButton';
 import { HighScorePrompt } from '../components/HighScorePrompt';
-import { INVADERS_DIMENSIONS, useSpaceInvadersGame } from '../games/space-invaders/useSpaceInvadersGame';
+import {
+  BunkerBlock,
+  INVADERS_DIMENSIONS,
+  Invader,
+  useSpaceInvadersGame,
+} from '../games/space-invaders/useSpaceInvadersGame';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 
 const D = INVADERS_DIMENSIONS;
+
+/**
+ * Les ~55 envahisseurs et ~80 blocs de bunker ne bougent pas à chaque frame :
+ * le moteur conserve la référence de leurs tableaux tant que rien ne change.
+ * En les isolant derrière un memo, React ne rejoue ces 135 nœuds SVG que sur
+ * les frames où ils bougent vraiment — le reste du temps seuls le joueur, les
+ * tirs et l'OVNI sont redessinés.
+ */
+const Invaders = React.memo(function Invaders({
+  invaders,
+}: {
+  invaders: Invader[];
+}): React.ReactElement {
+  return (
+    <>
+      {invaders
+        .filter((i) => i.alive)
+        .map((i) => (
+          <Rect
+            key={i.id}
+            x={i.x}
+            y={i.y}
+            width={D.INVADER_W}
+            height={D.INVADER_H}
+            rx={4}
+            fill={i.points === 30 ? '#ff7a9c' : i.points === 20 ? '#ffe083' : '#72fbff'}
+          />
+        ))}
+    </>
+  );
+});
+
+const Bunkers = React.memo(function Bunkers({
+  bunkers,
+}: {
+  bunkers: BunkerBlock[];
+}): React.ReactElement {
+  return (
+    <>
+      {bunkers
+        .filter((b) => b.alive)
+        .map((b) => (
+          <Rect key={b.id} x={b.x} y={b.y} width={D.BLOCK - 1} height={D.BLOCK - 1} fill="#46e68c" />
+        ))}
+    </>
+  );
+});
 
 export function SpaceInvadersGameScreen({
   onExit,
@@ -45,6 +97,7 @@ export function SpaceInvadersGameScreen({
 
   // Le joueur clignote pendant son invincibilité de réapparition.
   const playerVisible = state.invincible <= 0 || Math.floor(state.invincible * 10) % 2 === 0;
+  const paused = state.status === 'paused';
 
   return (
     <View style={styles.container}>
@@ -77,32 +130,8 @@ export function SpaceInvadersGameScreen({
             />
           ) : null}
 
-          {state.invaders
-            .filter((i) => i.alive)
-            .map((i) => (
-              <Rect
-                key={i.id}
-                x={i.x}
-                y={i.y}
-                width={D.INVADER_W}
-                height={D.INVADER_H}
-                rx={4}
-                fill={i.points === 30 ? '#ff7a9c' : i.points === 20 ? '#ffe083' : '#72fbff'}
-              />
-            ))}
-
-          {state.bunkers
-            .filter((b) => b.alive)
-            .map((b) => (
-              <Rect
-                key={b.id}
-                x={b.x}
-                y={b.y}
-                width={D.BLOCK - 1}
-                height={D.BLOCK - 1}
-                fill="#46e68c"
-              />
-            ))}
+          <Invaders invaders={state.invaders} />
+          <Bunkers bunkers={state.bunkers} />
 
           {playerVisible ? (
             <>
@@ -141,11 +170,12 @@ export function SpaceInvadersGameScreen({
 
         {state.status !== 'running' ? (
           <View style={styles.overlay}>
-            <Text style={styles.overTitle}>{state.status === 'paused' ? 'PAUSE' : 'GAME OVER'}</Text>
+            <Text style={styles.overTitle}>{paused ? 'PAUSE' : 'GAME OVER'}</Text>
             <ArcadeButton
-              label={state.status === 'paused' ? 'Reprendre' : 'Rejouer'}
-              onPress={state.status === 'paused' ? controls.pause : controls.restart}
+              label={paused ? 'Reprendre' : 'Rejouer'}
+              onPress={paused ? controls.pause : controls.restart}
             />
+            <ArcadeButton label="Quitter" onPress={onExit} variant="ghost" />
           </View>
         ) : null}
       </View>
@@ -155,13 +185,10 @@ export function SpaceInvadersGameScreen({
           <ControlButton label="←" onDown={() => controls.left(true)} onUp={() => controls.left(false)} />
           <ControlButton label="→" onDown={() => controls.right(true)} onUp={() => controls.right(false)} />
         </View>
-        <View style={styles.row}>
-          <ControlButton label="Pause" onPress={controls.pause} />
-          <ControlButton label="Tirer" onPress={controls.fire} wide />
-        </View>
+        <ControlButton label="Tirer" onPress={controls.fire} wide />
       </View>
 
-      <ArcadeButton label="Quitter" onPress={onExit} variant="ghost" />
+      <ArcadeButton label="Pause" onPress={controls.pause} />
 
       <HighScorePrompt
         visible={askName}
@@ -197,6 +224,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 10,
   },
   row: { flexDirection: 'row' },
   overlay: {

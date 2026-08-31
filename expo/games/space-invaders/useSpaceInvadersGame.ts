@@ -112,169 +112,189 @@ export function useSpaceInvadersGame(): {
       setState((s) => {
         if (s.status !== 'running') return s;
 
-        let next: InvadersState = {
-          ...s,
-          invaders: s.invaders.map((i) => ({ ...i })),
-          bunkers: s.bunkers.map((b) => ({ ...b })),
-          enemyBullets: s.enemyBullets.map((b) => ({ ...b })),
-          ufo: { ...s.ufo },
+        // `invaders` et `bunkers` gardent leur référence tant que rien ne les
+        // touche : l'écran mémoïse ces deux listes (~135 nœuds SVG) et n'a donc
+        // rien à redessiner sur la grande majorité des frames.
+        let invaders = s.invaders;
+        let bunkers = s.bunkers;
+        let score = s.score;
+        let lives = s.lives;
+        let invincible = Math.max(0, s.invincible - dt);
+        let playerBullet = s.playerBullet;
+        let enemyBullets = s.enemyBullets;
+        let ufo = s.ufo;
+
+        const killInvader = (index: number): void => {
+          invaders = invaders.map((inv, i) => (i === index ? { ...inv, alive: false } : inv));
         };
-        next.invincible = Math.max(0, next.invincible - dt);
+        const breakBunker = (index: number): void => {
+          bunkers = bunkers.map((b, i) => (i === index ? { ...b, alive: false } : b));
+        };
 
         // --- Joueur ---
         const vx = (move.current.right ? 1 : 0) - (move.current.left ? 1 : 0);
-        next.playerX = clamp(
-          next.playerX + vx * CONFIG.invaders.playerSpeed * dt,
+        const playerX = clamp(
+          s.playerX + vx * CONFIG.invaders.playerSpeed * dt,
           PLAYER_W / 2,
           W - PLAYER_W / 2,
         );
 
         // --- Projectiles ---
-        if (next.playerBullet) {
-          const y = next.playerBullet.y - CONFIG.invaders.bulletSpeed * dt;
-          next.playerBullet = y < 0 ? null : { x: next.playerBullet.x, y };
+        if (playerBullet) {
+          const y = playerBullet.y - CONFIG.invaders.bulletSpeed * dt;
+          playerBullet = y < 0 ? null : { x: playerBullet.x, y };
         }
-        next.enemyBullets = next.enemyBullets
-          .map((b) => ({ x: b.x, y: b.y + CONFIG.invaders.enemyBulletSpeed * dt }))
-          .filter((b) => b.y < H);
+        if (enemyBullets.length > 0) {
+          enemyBullets = enemyBullets
+            .map((b) => ({ x: b.x, y: b.y + CONFIG.invaders.enemyBulletSpeed * dt }))
+            .filter((b) => b.y < H);
+        }
 
         // --- Avancée de la formation (plus rapide à mesure qu'elle se vide) ---
         timers.current.step += dt;
-        const alive = next.invaders.filter((i) => i.alive);
+        const aliveCount = invaders.reduce((n, i) => (i.alive ? n + 1 : n), 0);
         const interval = Math.max(
           0.08,
-          0.62 - (1 - alive.length / INVADER_TOTAL) * 0.5 - next.wave * 0.025,
+          0.62 - (1 - aliveCount / INVADER_TOTAL) * 0.5 - s.wave * 0.025,
         );
         if (timers.current.step > interval) {
           timers.current.step = 0;
-          const edge = alive.some(
+          const edge = invaders.some(
             (i) =>
-              (dir.current === 1 && i.x > W - INVADER_W - 10) || (dir.current === -1 && i.x < 18),
+              i.alive &&
+              ((dir.current === 1 && i.x > W - INVADER_W - 10) || (dir.current === -1 && i.x < 18)),
           );
           if (edge) {
             dir.current = dir.current === 1 ? -1 : 1;
-            next.invaders.forEach((i) => {
-              i.y += 18;
-            });
+            invaders = invaders.map((i) => ({ ...i, y: i.y + 18 }));
           } else {
-            next.invaders.forEach((i) => {
-              i.x += dir.current * 10;
-            });
+            const step = dir.current * 10;
+            invaders = invaders.map((i) => ({ ...i, x: i.x + step }));
           }
         }
 
-        // --- Tir ennemi : la colonne la plus basse d'une colonne au hasard ---
+        // --- Tir ennemi : le plus bas d'une colonne au hasard ---
         timers.current.fire += dt;
         if (
-          timers.current.fire > Math.max(0.45, 1.25 - next.wave * 0.06) &&
-          next.enemyBullets.length < CONFIG.invaders.maxEnemyBullets &&
-          alive.length > 0
+          timers.current.fire > Math.max(0.45, 1.25 - s.wave * 0.06) &&
+          enemyBullets.length < CONFIG.invaders.maxEnemyBullets &&
+          aliveCount > 0
         ) {
           timers.current.fire = 0;
+          const alive = invaders.filter((i) => i.alive);
           const cols = [...new Set(alive.map((i) => i.col))];
           const col = cols[Math.floor(Math.random() * cols.length)];
           const shooter = alive.filter((i) => i.col === col).sort((a, b) => b.y - a.y)[0];
-          if (shooter) next.enemyBullets.push({ x: shooter.x + INVADER_W / 2, y: shooter.y + INVADER_H });
+          if (shooter) {
+            enemyBullets = [...enemyBullets, { x: shooter.x + INVADER_W / 2, y: shooter.y + INVADER_H }];
+          }
         }
 
         // --- OVNI ---
         timers.current.ufo += dt;
-        if (!next.ufo.active && timers.current.ufo > 9) {
+        if (!ufo.active && timers.current.ufo > 9) {
           timers.current.ufo = 0;
           const d: 1 | -1 = Math.random() > 0.5 ? 1 : -1;
-          next.ufo = { active: true, dir: d, x: d === 1 ? -38 : W + 38, y: 36 };
-        }
-        if (next.ufo.active) {
-          next.ufo.x += next.ufo.dir * 95 * dt;
-          if (next.ufo.x < -55 || next.ufo.x > W + 55) next.ufo.active = false;
+          ufo = { active: true, dir: d, x: d === 1 ? -38 : W + 38, y: 36 };
+        } else if (ufo.active) {
+          const x = ufo.x + ufo.dir * 95 * dt;
+          ufo = x < -55 || x > W + 55 ? { ...ufo, x, active: false } : { ...ufo, x };
         }
 
         // --- Tir du joueur ---
-        if (next.playerBullet) {
-          const pb = {
-            x: next.playerBullet.x - BULLET_W / 2,
-            y: next.playerBullet.y,
-            w: BULLET_W,
-            h: BULLET_H,
-          };
-          const hit = next.invaders.find(
+        if (playerBullet) {
+          const pb = { x: playerBullet.x - BULLET_W / 2, y: playerBullet.y, w: BULLET_W, h: BULLET_H };
+          const hitIndex = invaders.findIndex(
             (i) => i.alive && rectsHit(pb, { x: i.x, y: i.y, w: INVADER_W, h: INVADER_H }),
           );
-          if (hit) {
-            hit.alive = false;
-            next.score += hit.points;
-            next.playerBullet = null;
+          if (hitIndex >= 0) {
+            score += invaders[hitIndex].points;
+            killInvader(hitIndex);
+            playerBullet = null;
           }
-          const bunker = next.bunkers.find(
+          const bunkerIndex = bunkers.findIndex(
             (b) => b.alive && rectsHit(pb, { x: b.x, y: b.y, w: BLOCK, h: BLOCK }),
           );
-          if (bunker) {
-            bunker.alive = false;
-            next.playerBullet = null;
+          if (bunkerIndex >= 0) {
+            breakBunker(bunkerIndex);
+            playerBullet = null;
           }
           if (
-            next.playerBullet &&
-            next.ufo.active &&
-            rectsHit(pb, { x: next.ufo.x - UFO_W / 2, y: next.ufo.y - UFO_H / 2, w: UFO_W, h: UFO_H })
+            playerBullet &&
+            ufo.active &&
+            rectsHit(pb, { x: ufo.x - UFO_W / 2, y: ufo.y - UFO_H / 2, w: UFO_W, h: UFO_H })
           ) {
-            next.ufo.active = false;
-            next.score += CONFIG.invaders.ufoPoints;
-            next.playerBullet = null;
+            ufo = { ...ufo, active: false };
+            score += CONFIG.invaders.ufoPoints;
+            playerBullet = null;
           }
         }
 
         // --- Tirs ennemis : bunkers puis joueur ---
         let playerHit = false;
-        next.enemyBullets = next.enemyBullets.filter((b) => {
-          const br = { x: b.x - BULLET_W / 2, y: b.y, w: BULLET_W, h: BULLET_H };
-          const bunker = next.bunkers.find(
-            (bb) => bb.alive && rectsHit(br, { x: bb.x, y: bb.y, w: BLOCK, h: BLOCK }),
-          );
-          if (bunker) {
-            bunker.alive = false;
-            return false;
-          }
-          if (
-            next.invincible <= 0 &&
-            rectsHit(br, {
-              x: next.playerX - PLAYER_W / 2,
-              y: PLAYER_Y - PLAYER_H / 2,
-              w: PLAYER_W,
-              h: PLAYER_H,
-            })
-          ) {
-            playerHit = true;
-            return false;
-          }
-          return true;
-        });
+        if (enemyBullets.length > 0) {
+          enemyBullets = enemyBullets.filter((b) => {
+            const br = { x: b.x - BULLET_W / 2, y: b.y, w: BULLET_W, h: BULLET_H };
+            const bunkerIndex = bunkers.findIndex(
+              (bb) => bb.alive && rectsHit(br, { x: bb.x, y: bb.y, w: BLOCK, h: BLOCK }),
+            );
+            if (bunkerIndex >= 0) {
+              breakBunker(bunkerIndex);
+              return false;
+            }
+            if (
+              invincible <= 0 &&
+              rectsHit(br, {
+                x: playerX - PLAYER_W / 2,
+                y: PLAYER_Y - PLAYER_H / 2,
+                w: PLAYER_W,
+                h: PLAYER_H,
+              })
+            ) {
+              playerHit = true;
+              return false;
+            }
+            return true;
+          });
+        }
         if (playerHit) {
           // Une seule vie par touche : on vide le ciel et on rend le joueur
           // invulnérable le temps de repartir.
-          next.lives -= 1;
-          next.invincible = CONFIG.invaders.respawnInvincible;
-          next.enemyBullets = [];
-          next.playerBullet = null;
+          lives -= 1;
+          invincible = CONFIG.invaders.respawnInvincible;
+          enemyBullets = [];
+          playerBullet = null;
         }
 
         // --- Fin de partie / vague suivante ---
-        const stillAlive = next.invaders.filter((i) => i.alive);
-        if (next.lives <= 0 || stillAlive.some((i) => i.y + INVADER_H >= PLAYER_Y - PLAYER_H)) {
-          next.status = 'gameOver';
+        let status: GameStatus = s.status;
+        let wave = s.wave;
+        const stillAlive = invaders.filter((i) => i.alive);
+        if (lives <= 0 || stillAlive.some((i) => i.y + INVADER_H >= PLAYER_Y - PLAYER_H)) {
+          status = 'gameOver';
         } else if (stillAlive.length === 0) {
-          const wave = next.wave + 1;
+          wave += 1;
           resetWaveTimers();
-          next = {
-            ...next,
-            wave,
-            invaders: makeInvaders(wave),
-            bunkers: makeBunkers(),
-            playerBullet: null,
-            enemyBullets: [],
-            invincible: CONFIG.invaders.respawnInvincible,
-          };
+          invaders = makeInvaders(wave);
+          bunkers = makeBunkers();
+          playerBullet = null;
+          enemyBullets = [];
+          invincible = CONFIG.invaders.respawnInvincible;
         }
-        return next;
+
+        return {
+          status,
+          score,
+          lives,
+          wave,
+          playerX,
+          invincible,
+          invaders,
+          bunkers,
+          playerBullet,
+          enemyBullets,
+          ufo,
+        };
       }),
     [],
   );
@@ -302,6 +322,7 @@ export function useSpaceInvadersGame(): {
           status: s.status === 'paused' ? 'running' : s.status === 'running' ? 'paused' : s.status,
         })),
       restart: () => {
+        move.current = { left: false, right: false };
         resetWaveTimers();
         setState(initial());
       },

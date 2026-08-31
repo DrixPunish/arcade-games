@@ -23,7 +23,12 @@ export const CONFIG = {
   invaders: {
     rows: 5,
     cols: 11,
-    playerSpeed: 270,
+    /**
+     * Unités/seconde sur un terrain large de 360. À 270 le canon traversait
+     * l'écran en 1,3 s : viser une colonne précise demandait de s'arrêter à
+     * deux frames près. À 180 on garde de la réactivité en gagnant en finesse.
+     */
+    playerSpeed: 180,
     bulletSpeed: 430,
     enemyBulletSpeed: 210,
     maxEnemyBullets: 4,
