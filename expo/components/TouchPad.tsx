@@ -52,12 +52,13 @@ export function MultiTouchPad({
   );
 
   const panelRef = useRef<View | null>(null);
-  const panelOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const viewRefs = useRef<Record<string, View | null>>({});
   const rectsRef = useRef<Record<string, Rect | null>>({});
   const prevActiveRef = useRef<Record<string, boolean>>({});
   const [active, setActive] = useState<Record<string, boolean>>({});
   const [debugRects, setDebugRects] = useState<Record<string, Rect | null>>({});
+  // Uniquement pour l'overlay de mise au point : en état, pas en ref, car lu au rendu.
+  const [debugOrigin, setDebugOrigin] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const measureKey = useCallback(
     (key: string): void => {
@@ -79,15 +80,17 @@ export function MultiTouchPad({
   );
 
   const measureAll = useCallback((): void => {
-    try {
-      panelRef.current?.measure((_x, _y, _w, _h, pageX, pageY) => {
-        panelOriginRef.current = { x: pageX, y: pageY };
-      });
-    } catch {
-      // ignore
+    if (debugHitboxes) {
+      try {
+        panelRef.current?.measure((_x, _y, _w, _h, pageX, pageY) => {
+          setDebugOrigin({ x: pageX, y: pageY });
+        });
+      } catch {
+        // ignore
+      }
     }
     keys.forEach(measureKey);
-  }, [keys, measureKey]);
+  }, [debugHitboxes, keys, measureKey]);
 
   useEffect(() => {
     // Plusieurs mesures : la mise en page se stabilise de façon asynchrone.
@@ -179,13 +182,12 @@ export function MultiTouchPad({
           {keys.map((key) => {
             const r = debugRects[key];
             if (!r) return null;
-            const origin = panelOriginRef.current;
             return (
               <View
                 key={`debug-${key}`}
                 style={[
                   styles.debugBox,
-                  { left: r.x - origin.x, top: r.y - origin.y, width: r.width, height: r.height },
+                  { left: r.x - debugOrigin.x, top: r.y - debugOrigin.y, width: r.width, height: r.height },
                 ]}
               />
             );

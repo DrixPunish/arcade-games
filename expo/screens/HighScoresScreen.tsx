@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ArcadeButton } from '../components/ArcadeButton';
 import { CONFIG } from '../lib/gameConfig';
@@ -11,6 +11,8 @@ import {
 } from '../lib/highScores';
 
 type Status = 'loading' | 'ready' | 'unavailable';
+/** Dernier chargement abouti, avec ce qu'il concernait : sert à savoir s'il est encore d'actualité. */
+type Loaded = { game: GameId; board: Board; rows: HighScoreEntry[] | null };
 
 export function HighScoresScreen({
   game,
@@ -22,28 +24,23 @@ export function HighScoresScreen({
   onBack: () => void;
 }): React.ReactElement {
   const [board, setBoard] = useState<Board>(isOnlineEnabled ? 'online' : 'local');
-  const [scores, setScores] = useState<HighScoreEntry[]>([]);
-  const [status, setStatus] = useState<Status>('loading');
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setStatus('loading');
     void getHighScores(game, board).then((rows) => {
-      if (cancelled) return;
-      if (rows === null) {
-        setScores([]);
-        setStatus('unavailable');
-      } else {
-        setScores(rows);
-        setStatus('ready');
-      }
+      if (!cancelled) setLoaded({ game, board, rows });
     });
     return () => {
       cancelled = true;
     };
   }, [game, board]);
 
-  const renderBody = useCallback((): React.ReactElement => {
+  const fresh = loaded !== null && loaded.game === game && loaded.board === board;
+  const status: Status = !fresh ? 'loading' : loaded.rows === null ? 'unavailable' : 'ready';
+  const scores = fresh ? (loaded.rows ?? []) : [];
+
+  const renderBody = (): React.ReactElement => {
     if (status === 'loading') {
       return (
         <View style={styles.centered}>
@@ -78,7 +75,7 @@ export function HighScoresScreen({
         ))}
       </>
     );
-  }, [status, scores]);
+  };
 
   return (
     <View style={styles.container}>

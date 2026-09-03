@@ -34,27 +34,27 @@ export function AsteroidsGameScreen({
   const [saving, setSaving] = useState<boolean>(false);
   const [stageSize, setStageSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
 
-  const soundsRef = useRef<ReturnType<typeof getAsteroidsSounds> | null>(null);
-  if (!soundsRef.current) {
+  const sounds = useMemo(() => {
     try {
-      soundsRef.current = getAsteroidsSounds();
+      return getAsteroidsSounds();
     } catch (e) {
       console.warn('[AsteroidsGameScreen] failed to get audio manager', e);
+      return null;
     }
-  }
+  }, []);
 
   useEffect(() => {
     try {
-      soundsRef.current?.init();
+      sounds?.init();
     } catch (e) {
       console.warn('[AsteroidsGameScreen] audio init failed', e);
     }
     return () => {
       try {
-        soundsRef.current?.stopAllLoops();
+        sounds?.stopAllLoops();
       } catch {}
     };
-  }, []);
+  }, [sounds]);
 
   // --- Sound event detection ---
   const prevAsteroidsRef = useRef(state.asteroids);
@@ -64,7 +64,7 @@ export function AsteroidsGameScreen({
   const prevLevelRef = useRef(state.level);
 
   useEffect(() => {
-    const mgr = soundsRef.current;
+    const mgr = sounds;
     if (!mgr) return;
     try {
       // Asteroid destroyed -> bang based on previous size.
@@ -114,14 +114,14 @@ export function AsteroidsGameScreen({
     } catch (e) {
       console.warn('[AsteroidsGameScreen] sound effect error', e);
     }
-  }, [state.asteroids, state.saucers, state.death.active, state.lives, state.level]);
+  }, [sounds, state.asteroids, state.saucers, state.death.active, state.lives, state.level]);
 
   useEffect(() => {
     if (state.status === 'gameOver') {
-      try { soundsRef.current?.stopAllLoops(); } catch {}
+      try { sounds?.stopAllLoops(); } catch {}
       void qualifiesForHighScore('asteroids', state.score).then(setAskName).catch(() => {});
     }
-  }, [state.status, state.score]);
+  }, [sounds, state.status, state.score]);
 
   const submit = useCallback(
     async (initials: string): Promise<void> => {
@@ -135,30 +135,30 @@ export function AsteroidsGameScreen({
   );
 
   // --- Wrap controls to drive sounds ---
-  const thrustActiveRef = useRef(false);
+  const [thrusting, setThrusting] = useState<boolean>(false);
   const wrappedThrust = useCallback(
     (active: boolean) => {
-      thrustActiveRef.current = active;
-      try { soundsRef.current?.setLoop('thrust', active && !prevDeathRef.current); } catch {}
+      setThrusting(active);
+      try { sounds?.setLoop('thrust', active && !prevDeathRef.current); } catch {}
       controls.thrust(active);
     },
-    [controls],
+    [sounds, controls],
   );
 
   const wrappedFire = useCallback(() => {
-    try { soundsRef.current?.play('fire'); } catch {}
+    try { sounds?.play('fire'); } catch {}
     controls.fire();
-  }, [controls]);
+  }, [sounds, controls]);
 
   const wrappedHyperspace = useCallback(() => {
-    try { soundsRef.current?.play('bangSmall'); } catch {}
+    try { sounds?.play('bangSmall'); } catch {}
     controls.hyperspace();
-  }, [controls]);
+  }, [sounds, controls]);
 
   const onTestSfx = useCallback(() => {
     console.log('[AsteroidsGameScreen] Test SFX pressed');
-    soundsRef.current?.play('fire');
-  }, []);
+    sounds?.play('fire');
+  }, [sounds]);
 
   // --- Stage layout / scaling ---
   const onStageLayout = useCallback((e: LayoutChangeEvent): void => {
@@ -262,7 +262,7 @@ export function AsteroidsGameScreen({
                 }}
               >
                 <AsteroidsSprite
-                  spriteKey={thrustActiveRef.current ? 'shipThrust' : 'ship'}
+                  spriteKey={thrusting ? 'shipThrust' : 'ship'}
                   size={shipVisualSize}
                   rotation={state.ship.angle}
                 />
@@ -360,7 +360,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
