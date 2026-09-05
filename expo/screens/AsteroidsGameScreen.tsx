@@ -9,9 +9,6 @@ import { ASTEROIDS_DIMENSIONS, useAsteroidsGame } from '../games/asteroids/useAs
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 import { getAsteroidsSounds } from '../lib/asteroidsSounds';
 
-/** Bouton « Test SFX » : uniquement en développement. */
-const DEBUG_SFX = __DEV__;
-
 const LARGE_SPRITES: AsteroidsSpriteKey[] = ['asteroidLarge1', 'asteroidLarge2', 'asteroidLarge3'];
 const MEDIUM_SPRITES: AsteroidsSpriteKey[] = ['asteroidMedium1', 'asteroidMedium2', 'asteroidMedium3'];
 const SMALL_SPRITES: AsteroidsSpriteKey[] = ['asteroidSmall1', 'asteroidSmall2', 'asteroidSmall3'];
@@ -154,11 +151,6 @@ export function AsteroidsGameScreen({
     try { sounds?.play('bangSmall'); } catch {}
     controls.hyperspace();
   }, [sounds, controls]);
-
-  const onTestSfx = useCallback(() => {
-    console.log('[AsteroidsGameScreen] Test SFX pressed');
-    sounds?.play('fire');
-  }, [sounds]);
 
   // --- Stage layout / scaling ---
   const onStageLayout = useCallback((e: LayoutChangeEvent): void => {
@@ -311,7 +303,6 @@ export function AsteroidsGameScreen({
 
       <View style={styles.bottom}>
         <ArcadeButton label="Pause" onPress={controls.pause} fullWidth />
-        {DEBUG_SFX && <ArcadeButton label="Test SFX" onPress={onTestSfx} variant="ghost" />}
       </View>
 
       <HighScorePrompt
