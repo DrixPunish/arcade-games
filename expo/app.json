@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Arcade Games",
-    "slug": "arcade",
+    "slug": "arcadev2",
     "owner": "drixpunish-2",
     "version": "1.1.0",
     "orientation": "portrait",
@@ -47,7 +47,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "40373d0b-f784-425b-a19f-2800954daeb5"
+        "projectId": "40da473c-5727-4955-896d-00256cdbab54"
       },
       "supabase": {
         "url": "https://wcleoopxtczhmxmycpvj.supabase.co",
@@ -58,7 +58,7 @@
       "policy": "sdkVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/40373d0b-f784-425b-a19f-2800954daeb5",
+      "url": "https://u.expo.dev/40da473c-5727-4955-896d-00256cdbab54",
       "fallbackToCacheTimeout": 10000
     }
   }
