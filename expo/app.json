@@ -2,14 +2,12 @@
   "expo": {
     "name": "Arcade Games",
     "slug": "arcade",
+    "owner": "drixpunish-2",
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "arcade",
     "userInterfaceStyle": "automatic",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.drixpunish.arcade"
@@ -17,11 +15,12 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#050714"
       },
       "package": "com.drixpunish.arcade"
     },
     "web": {
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -37,16 +36,14 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#050714"
         }
       ],
-      "expo-status-bar",
-      "expo-asset"
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "owner": "drixpunish-2",
     "extra": {
       "router": {},
       "eas": {

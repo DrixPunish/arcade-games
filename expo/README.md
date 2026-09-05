@@ -116,7 +116,13 @@ annotées : c'est la référence pour toute modification des coordonnées dans
 
 Le projet est publié sur EAS Update, compte Expo **`drixpunish-2`**, projet
 [`arcade`](https://expo.dev/accounts/drixpunish-2/projects/arcade), canal
-**`preview`** (runtime `exposdk:54.0.0`).
+**`preview`** (runtime `exposdk:57.0.0`).
+
+⚠️ **Expo Go ne sait charger que le dernier SDK.** Quand l'application Expo Go
+se met à jour, il faut monter le projet au SDK correspondant, sinon elle refuse
+de charger le projet. La montée se fait avec `bunx expo install expo@^<n>.0.0`
+puis `bunx expo install --fix`, et se termine **toujours** par
+`bunx expo-doctor`, qui doit passer 21/21.
 
 Sur le téléphone : installer **Expo Go**, s'y connecter avec le compte
 `drixpunish-2` (depuis mai 2026 Expo n'ouvre que les projets dont on est
@@ -133,12 +139,24 @@ Le QR code correspondant est dans `url-expo-go.txt`, à la racine du dépôt.
 Après tout changement de code JS, depuis `expo/` :
 
 ```bash
-eas update --branch preview --message "<résumé>"
+eas update --branch v2 --environment preview --message "<résumé>"
 ```
+
+`--environment` est obligatoire depuis le SDK 57 en mode non interactif.
 
 Le testeur récupère la nouvelle version en rouvrant le lien. C'est de l'OTA :
 valable pour le **JS pur**. Ajouter une dépendance **native** (ou changer la
-config native d'`app.json`) exige un `eas build`, un update ne suffit pas.
+config native d'`app.json`) exige un `eas build`, un update ne suffit pas — et
+une montée de SDK impose toujours un nouveau build pour les testeurs.
+
+### Configuration du projet
+
+Le projet suit la forme d'un projet Expo SDK 57 neuf : **pas de
+`babel.config.js` ni de `metro.config.js`** (les valeurs par défaut suffisent
+et un fichier obsolète casse le bundle), `web.output` en `single` (le rendu
+statique tente un rendu côté Node, incompatible avec `requestAnimationFrame`),
+et toutes les dépendances posées par `expo install` pour rester sur les
+versions sanctionnées par le SDK.
 
 ## Documentation
 

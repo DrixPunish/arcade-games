@@ -10,8 +10,7 @@ web-build/
 expo-env.d.ts
 
 # Native
-ios/
-android/
+.kotlin/
 *.orig.*
 *.jks
 *.p8
@@ -23,7 +22,6 @@ android/
 .metro-health-check*
 
 # debug
-core
 npm-debug.*
 yarn-debug.*
 yarn-error.*
@@ -33,9 +31,13 @@ yarn-error.*
 *.pem
 
 # local env files
-.env
 .env*.local
 
 # typescript
 *.tsbuildinfo
-.vercel
+
+example
+
+# generated native folders
+/ios
+/android
