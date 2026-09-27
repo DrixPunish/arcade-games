@@ -125,8 +125,8 @@ puis `bunx expo install --fix`, et se termine **toujours** par
 `bunx expo-doctor`, qui doit passer 21/21.
 
 Sur le téléphone : installer **Expo Go**, s'y connecter avec le compte
-`drixpunish-2` (depuis mai 2026 Expo n'ouvre que les projets dont on est
-propriétaire), puis ouvrir :
+`drixpunish-2-2` — c'est le nom d'utilisateur, `drixpunish-2` étant
+l'organisation et non un identifiant de connexion —, puis ouvrir :
 
 ```
 exp://u.expo.dev/40373d0b-f784-425b-a19f-2800954daeb5?channel-name=preview
@@ -139,7 +139,7 @@ Le QR code correspondant est dans `url-expo-go.txt`, à la racine du dépôt.
 Après tout changement de code JS, depuis `expo/` :
 
 ```bash
-eas update --branch v2 --environment preview --message "<résumé>"
+eas update --branch preview --environment preview --message "<résumé>"
 ```
 
 `--environment` est obligatoire depuis le SDK 57 en mode non interactif.
