@@ -89,6 +89,49 @@ export const CONFIG = {
     /** Invincibilité après avoir perdu une vie (secondes). */
     respawnInvincible: 1.5,
   },
+  /**
+   * Track & Field (Konami, 1983). Les angles optimaux sont ceux de la borne :
+   * 42 degres a la longueur, 43 au javelot. Ils sont sous 45 parce que
+   * l'athlete lache le projectile au-dessus du sol — la physique du tir
+   * parabolique avec hauteur de lacher les reproduit sans les coder en dur.
+   */
+  trackField: {
+    /** Vitesse maximale atteignable en martelant, en metres par seconde. */
+    topSpeed: 11.5,
+    /** Gain de vitesse par alternance correcte des deux boutons. */
+    impulse: 0.62,
+    /** Perte de vitesse par seconde quand on arrete de marteler. */
+    decay: 5.2,
+    /**
+     * Vitesse de balayage de l'angle tant qu'on maintient le bouton (deg/s).
+     * À 95 deg/s, atteindre 42 demande 0,44 s, soit environ 5 m parcourus à
+     * pleine vitesse : il faut anticiper l'appui sans que la planche arrive
+     * trop vite. À 62 la fenêtre était intenable, on mordait presque à coup sûr.
+     */
+    angleSweep: 95,
+    angleMax: 85,
+    gravity: 9.81,
+    /**
+     * Par épreuve : l'angle optimal documenté de la borne, et la part de la
+     * vitesse de course réellement transmise au saut ou au projectile (un
+     * sauteur en perd, un javelot part bien plus vite que le lanceur).
+     * La hauteur de lâcher n'est pas saisie : elle se DÉDUIT de l'angle
+     * optimal, ce qui garantit que l'optimum tombe pile sur la valeur voulue.
+     */
+    events: {
+      longJump: { optimalAngle: 42, launchFactor: 0.73 },
+      javelin: { optimalAngle: 43, launchFactor: 2.42 },
+    },
+    /** Minima a franchir pour passer a l'epreuve suivante. */
+    qualify: {
+      dash100: 11.6,
+      longJump: 6.5,
+      javelin: 62,
+      hurdles: 15.2,
+    },
+    /** Trois essais aux concours, une seule manche aux courses. */
+    fieldAttempts: 3,
+  },
 } as const;
 
 export type GameStatus = 'running' | 'paused' | 'gameOver';

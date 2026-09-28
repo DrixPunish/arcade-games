@@ -3,12 +3,13 @@ import { Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Rocket, Shield } from 'lucide-react-native';
+import { Medal, Rocket, Shield } from 'lucide-react-native';
 import { AsteroidsGameScreen } from './screens/AsteroidsGameScreen';
 import { GameMenuScreen } from './screens/GameMenuScreen';
 import { HighScoresScreen } from './screens/HighScoresScreen';
 import { HubScreen } from './screens/HubScreen';
 import { SpaceInvadersGameScreen } from './screens/SpaceInvadersGameScreen';
+import { TrackFieldGameScreen } from './screens/TrackFieldGameScreen';
 
 type Route =
   | 'hub'
@@ -17,7 +18,10 @@ type Route =
   | 'asteroidsScores'
   | 'invadersMenu'
   | 'invadersGame'
-  | 'invadersScores';
+  | 'invadersScores'
+  | 'trackMenu'
+  | 'trackGame'
+  | 'trackScores';
 
 function renderRoute(route: Route, go: (next: Route) => void): React.ReactElement {
   switch (route) {
@@ -26,9 +30,7 @@ function renderRoute(route: Route, go: (next: Route) => void): React.ReactElemen
         <HubScreen
           onAsteroids={() => go('asteroidsMenu')}
           onInvaders={() => go('invadersMenu')}
-          onOlympic={() =>
-            Alert.alert('Olympic Games', 'Cette borne n’est pas encore développée.')
-          }
+          onOlympic={() => go('trackMenu')}
           onPacman={() => Alert.alert('Pac-Man', 'Cette borne n’est pas encore développée.')}
         />
       );
@@ -68,6 +70,22 @@ function renderRoute(route: Route, go: (next: Route) => void): React.ReactElemen
       return (
         <SpaceInvadersGameScreen onExit={() => go('invadersMenu')} onScores={() => go('invadersScores')} />
       );
+    case 'trackMenu':
+      return (
+        <GameMenuScreen
+          title="Track & Field"
+          icon={<Medal color="#ff9d5c" size={54} />}
+          onPlay={() => go('trackGame')}
+          onScores={() => go('trackScores')}
+          onBack={() => go('hub')}
+        />
+      );
+    case 'trackScores':
+      return (
+        <HighScoresScreen game="trackField" title="Track & Field" onBack={() => go('trackMenu')} />
+      );
+    case 'trackGame':
+      return <TrackFieldGameScreen onExit={() => go('trackMenu')} onScores={() => go('trackScores')} />;
   }
 }
 

@@ -350,6 +350,46 @@ export function InvadersControls({
   );
 }
 
+/* --------------------------------------------------------- Track & Field -- */
+
+/**
+ * Deux boutons de course à marteler en alternance, et un bouton d'action
+ * maintenu pour régler l'angle. C'est le schéma de commande de la borne
+ * Konami de 1983, transposé au tactile.
+ */
+const TRACK_ROWS: PadRow[] = [
+  [
+    { key: 'runA', label: 'COURIR ◀', mode: 'tap' },
+    { key: 'runB', label: 'COURIR ▶', mode: 'tap' },
+  ],
+  [{ key: 'action', label: 'SAUT / LANCER', mode: 'hold' }],
+];
+
+export function TrackFieldControls({
+  onRunA,
+  onRunB,
+  onAction,
+}: {
+  onRunA: () => void;
+  onRunB: () => void;
+  onAction: (held: boolean) => void;
+}): React.ReactElement {
+  const onHoldChange = useCallback(
+    (key: string, activeNow: boolean): void => {
+      if (key === 'action') onAction(activeNow);
+    },
+    [onAction],
+  );
+  const onTap = useCallback(
+    (key: string): void => {
+      if (key === 'runA') onRunA();
+      else if (key === 'runB') onRunB();
+    },
+    [onRunA, onRunB],
+  );
+  return <MultiTouchPad rows={TRACK_ROWS} onHoldChange={onHoldChange} onTap={onTap} />;
+}
+
 const styles = StyleSheet.create({
   panel: { width: '100%', maxWidth: 620, gap: 10, marginTop: 8, marginBottom: 10 },
   row: { flexDirection: 'row', gap: 10, width: '100%' },

@@ -24,18 +24,23 @@ export function HubScreen({
   const available = Math.min(width, 620) - 44;
   const tileWidth = Math.min(MAX_TILE, (available - GAP) / 2);
 
-  const [best, setBest] = useState<{ asteroids: number; spaceInvaders: number }>({
-    asteroids: 0,
-    spaceInvaders: 0,
-  });
+  const [best, setBest] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([getLocalHighScores('asteroids'), getLocalHighScores('spaceInvaders')]).then(
-      ([a, s]) => {
-        if (!cancelled) setBest({ asteroids: a[0]?.score ?? 0, spaceInvaders: s[0]?.score ?? 0 });
-      },
-    );
+    void Promise.all([
+      getLocalHighScores('asteroids'),
+      getLocalHighScores('spaceInvaders'),
+      getLocalHighScores('trackField'),
+    ]).then(([a, s, t]) => {
+      if (!cancelled) {
+        setBest({
+          asteroids: a[0]?.score ?? 0,
+          spaceInvaders: s[0]?.score ?? 0,
+          trackField: t[0]?.score ?? 0,
+        });
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -65,24 +70,23 @@ export function HubScreen({
         <GameTile
           art={TILE_ART.asteroids}
           title="Asteroids"
-          status={scoreLabel(best.asteroids)}
+          status={scoreLabel(best.asteroids ?? 0)}
           width={tileWidth}
           onPress={onAsteroids}
         />
         <GameTile
           art={TILE_ART.invaders}
           title="Space Invaders"
-          status={scoreLabel(best.spaceInvaders)}
+          status={scoreLabel(best.spaceInvaders ?? 0)}
           width={tileWidth}
           onPress={onInvaders}
         />
         <GameTile
           art={TILE_ART.olympic}
-          title="Olympic Games"
-          status="Bientôt"
+          title="Track & Field"
+          status={scoreLabel(best.trackField ?? 0)}
           width={tileWidth}
           onPress={onOlympic}
-          comingSoon
         />
         <GameTile
           art={TILE_ART.pacman}

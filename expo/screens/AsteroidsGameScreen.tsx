@@ -9,6 +9,9 @@ import { ASTEROIDS_DIMENSIONS, useAsteroidsGame } from '../games/asteroids/useAs
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 import { getAsteroidsSounds } from '../lib/gameSounds';
 
+/** Diamètre de référence de l'onde de choc ; l'animation ne fait que la mettre à l'échelle. */
+const DEATH_RING = 100;
+
 const LARGE_SPRITES: AsteroidsSpriteKey[] = ['asteroidLarge1', 'asteroidLarge2', 'asteroidLarge3'];
 const MEDIUM_SPRITES: AsteroidsSpriteKey[] = ['asteroidMedium1', 'asteroidMedium2', 'asteroidMedium3'];
 const SMALL_SPRITES: AsteroidsSpriteKey[] = ['asteroidSmall1', 'asteroidSmall2', 'asteroidSmall3'];
@@ -253,18 +256,21 @@ export function AsteroidsGameScreen({
             )}
 
             {state.death.active && (
+              // Taille fixe agrandie par `scale` : animer width/height aurait
+              // relancé un calcul de mise en page à chaque image, là où une
+              // transformation n'en demande aucun.
               <View
-                style={{
-                  position: 'absolute',
-                  left: offX + state.death.x * scale - (40 + state.death.t * 60) / 2,
-                  top: offY + state.death.y * scale - (40 + state.death.t * 60) / 2,
-                  width: 40 + state.death.t * 60,
-                  height: 40 + state.death.t * 60,
-                  borderRadius: (40 + state.death.t * 60) / 2,
-                  borderWidth: 3,
-                  borderColor: '#ff4778',
-                  opacity: Math.max(0, 1 - state.death.t),
-                }}
+                style={[
+                  styles.deathRing,
+                  {
+                    opacity: Math.max(0, 1 - state.death.t),
+                    transform: [
+                      { translateX: offX + state.death.x * scale - DEATH_RING / 2 },
+                      { translateY: offY + state.death.y * scale - DEATH_RING / 2 },
+                      { scale: (40 + state.death.t * 60) / DEATH_RING },
+                    ],
+                  },
+                ]}
               />
             )}
           </>
@@ -338,6 +344,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: 0,
+  },
+  deathRing: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: DEATH_RING,
+    height: DEATH_RING,
+    borderRadius: DEATH_RING / 2,
+    borderWidth: 3,
+    borderColor: '#ff4778',
   },
   bottom: {
     width: '100%',

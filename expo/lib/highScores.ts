@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CONFIG } from './gameConfig';
 import { isOnlineEnabled, supabase, withTimeout } from './supabase';
 
-export type GameId = 'asteroids' | 'spaceInvaders';
+export type GameId = 'asteroids' | 'spaceInvaders' | 'trackField';
 export type HighScoreEntry = { initials: string; score: number; date: number };
 /** Quel classement on regarde : celui du téléphone, ou celui partagé. */
 export type Board = 'online' | 'local';
