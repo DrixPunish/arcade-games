@@ -6,11 +6,12 @@ export function useGameLoop(active: boolean, onFrame: (dt: number) => void): voi
   const lastRef = useRef<number | null>(null);
   const callbackRef = useRef(onFrame);
 
-  // Le callback est rafraîchi via un effet plutôt qu'en plein rendu :
-  // écrire dans une ref pendant le rendu est un effet de bord interdit.
+  // Le callback est rafraîchi via un effet plutôt qu'en plein rendu : écrire
+  // dans une ref pendant le rendu est un effet de bord interdit. La dépendance
+  // évite de replanifier cet effet à chacun des 60 rendus par seconde.
   useEffect(() => {
     callbackRef.current = onFrame;
-  });
+  }, [onFrame]);
 
   useEffect(() => {
     if (!active) {

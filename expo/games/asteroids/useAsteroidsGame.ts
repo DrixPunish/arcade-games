@@ -65,13 +65,17 @@ const spawnAsteroid = (level: number): Asteroid => {
   };
 };
 
-const makeAsteroids = (level: number): Asteroid[] =>
+/**
+ * `safeFrom` est la position à tenir à distance : le centre au tout début,
+ * le vaisseau lui-même pour les vagues suivantes. C'est ce qui permet de ne
+ * donner aucune invincibilité en début de vague, comme sur la borne.
+ */
+const makeAsteroids = (level: number, safeFrom: Vec = { x: W / 2, y: H / 2 }): Asteroid[] =>
   Array.from({ length: asteroidCount(level) }, () => {
     let asteroid = spawnAsteroid(level);
     for (
       let guard = 0;
-      guard < 12 &&
-      dist(asteroid, { x: W / 2, y: H / 2 }) < CONFIG.asteroids.asteroidSpawnSafeRadius;
+      guard < 12 && dist(asteroid, safeFrom) < CONFIG.asteroids.asteroidSpawnSafeRadius;
       guard += 1
     ) {
       asteroid = spawnAsteroid(level);
@@ -302,11 +306,11 @@ export function useAsteroidsGame(): {
           beginDeath(n);
         }
 
-        // --- Niveau suivant ---
+        // --- Niveau suivant : pas d'invincibilité, les astéroïdes
+        // apparaissent simplement loin du vaisseau ---
         if (!n.death.active && n.asteroids.length === 0 && n.saucers.length === 0) {
           n.level += 1;
-          n.asteroids = makeAsteroids(n.level);
-          n.ship.invincible = Math.max(n.ship.invincible, 1.5);
+          n.asteroids = makeAsteroids(n.level, n.ship);
         }
         return n;
       }),
@@ -346,24 +350,18 @@ export function useAsteroidsGame(): {
             ],
           };
         }),
-      // L'hyperespace est un pari : sur la borne, une réapparition sur quatre
-      // se solde par la destruction du vaisseau.
+      // L'hyperespace téléporte au hasard et SANS protection : on peut très
+      // bien réapparaître dans un astéroïde. C'est là tout le risque du saut,
+      // il n'y a pas de mort tirée au sort en plus.
       hyperspace: () =>
-        setState((s) => {
-          if (s.status !== 'running' || s.death.active) return s;
-          const n: AsteroidsState = {
-            ...s,
-            ship: { ...s.ship },
-            death: { ...s.death },
-            bullets: [...s.bullets],
-          };
-          if (Math.random() < CONFIG.asteroids.hyperspaceRisk) {
-            beginDeath(n);
-            return n;
-          }
-          n.ship = { ...n.ship, x: Math.random() * W, y: Math.random() * H, invincible: 0.6 };
-          return n;
-        }),
+        setState((s) =>
+          s.status !== 'running' || s.death.active
+            ? s
+            : {
+                ...s,
+                ship: { ...s.ship, x: Math.random() * W, y: Math.random() * H, invincible: 0 },
+              },
+        ),
       pause: () =>
         setState((s) => ({
           ...s,

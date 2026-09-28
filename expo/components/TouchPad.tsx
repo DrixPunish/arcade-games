@@ -118,16 +118,27 @@ export function MultiTouchPad({
         }
       }
       prevActiveRef.current = next;
-      setActive(next);
+      // Un doigt qui glisse émet des dizaines d'évènements par seconde : sans
+      // cette comparaison, chacun provoquait un rendu du pavé pour rien.
+      let changed = false;
+      for (const key of keys) if ((prev[key] === true) !== (next[key] === true)) changed = true;
+      if (changed) setActive(next);
     },
     [keys, modes, onHoldChange, onTap],
   );
 
-  const handleTouches = useCallback(
-    (event: GestureResponderEvent): void => {
+  const applyTouches = useCallback(
+    (event: GestureResponderEvent, dropChanged: boolean): void => {
+      // Les doigts qui viennent de se lever restent parfois listés dans
+      // `touches` sur iOS : on les retire explicitement, sinon le bouton
+      // correspondant reste enfoncé jusqu'au geste suivant.
+      const lifted = dropChanged
+        ? new Set((event.nativeEvent.changedTouches ?? []).map((t) => t.identifier))
+        : null;
       const next: Record<string, boolean> = {};
       // pageX/pageY : même repère que les rectangles mesurés via measure().
       for (const touch of event.nativeEvent.touches) {
+        if (lifted?.has(touch.identifier)) continue;
         for (const key of keys) {
           if (isInside(touch.pageX, touch.pageY, rectsRef.current[key] ?? null)) next[key] = true;
         }
@@ -135,6 +146,21 @@ export function MultiTouchPad({
       sync(next);
     },
     [keys, sync],
+  );
+
+  const handleTouches = useCallback(
+    (event: GestureResponderEvent): void => applyTouches(event, false),
+    [applyTouches],
+  );
+
+  /**
+   * `onResponderRelease` n'arrive qu'au lever du DERNIER doigt. Lâcher une
+   * flèche tout en gardant « Tirer » enfoncé ne déclenchait donc rien, et la
+   * flèche restait active. `onTouchEnd` est émis pour chaque doigt.
+   */
+  const handleTouchEnd = useCallback(
+    (event: GestureResponderEvent): void => applyTouches(event, true),
+    [applyTouches],
   );
 
   const releaseAll = useCallback((): void => {
@@ -161,6 +187,8 @@ export function MultiTouchPad({
       onResponderMove={handleTouches}
       onResponderRelease={handleTouches}
       onResponderTerminate={releaseAll}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       {rows.map((row, rowIndex) => (
         <View key={`row-${rowIndex}`} style={styles.row} onLayout={measureAll}>

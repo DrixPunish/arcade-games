@@ -13,10 +13,16 @@ const LARGE_SPRITES: AsteroidsSpriteKey[] = ['asteroidLarge1', 'asteroidLarge2',
 const MEDIUM_SPRITES: AsteroidsSpriteKey[] = ['asteroidMedium1', 'asteroidMedium2', 'asteroidMedium3'];
 const SMALL_SPRITES: AsteroidsSpriteKey[] = ['asteroidSmall1', 'asteroidSmall2', 'asteroidSmall3'];
 
+const spriteCache = new Map<string, AsteroidsSpriteKey>();
+/** Sprite tiré de l'id, donc stable pour un astéroïde donné — et mis en cache. */
 const pickSprite = (id: string, pool: AsteroidsSpriteKey[]): AsteroidsSpriteKey => {
+  const cached = spriteCache.get(id);
+  if (cached) return cached;
   let h = 0;
   for (let i = 0; i < id.length; i += 1) h = (h * 31 + id.charCodeAt(i)) | 0;
-  return pool[Math.abs(h) % pool.length];
+  const key = pool[Math.abs(h) % pool.length];
+  spriteCache.set(id, key);
+  return key;
 };
 
 export function AsteroidsGameScreen({
@@ -59,6 +65,7 @@ export function AsteroidsGameScreen({
   const prevDeathRef = useRef(state.death.active);
   const prevLivesRef = useRef(state.lives);
   const prevLevelRef = useRef(state.level);
+  const prevScoreRef = useRef(state.score);
 
   useEffect(() => {
     const mgr = sounds;
@@ -70,7 +77,12 @@ export function AsteroidsGameScreen({
       // déclencherait une dizaine d'explosions simultanées.
       const fieldReplaced = state.level !== prevLevelRef.current;
       prevLevelRef.current = state.level;
-      if (!fieldReplaced) {
+      // Détruire quoi que ce soit fait toujours monter le score : c'est le
+      // signal le moins cher pour savoir s'il vaut la peine de comparer les
+      // deux listes. Sans ça on construisait un Set d'ids 60 fois par seconde.
+      const somethingDestroyed = state.score !== prevScoreRef.current;
+      prevScoreRef.current = state.score;
+      if (!fieldReplaced && somethingDestroyed) {
         const prev = prevAsteroidsRef.current;
         const currentIds = new Set(state.asteroids.map((a) => a.id));
         for (const old of prev) {
@@ -111,7 +123,7 @@ export function AsteroidsGameScreen({
     } catch (e) {
       console.warn('[AsteroidsGameScreen] sound effect error', e);
     }
-  }, [sounds, state.asteroids, state.saucers, state.death.active, state.lives, state.level]);
+  }, [sounds, state.asteroids, state.saucers, state.death.active, state.lives, state.level, state.score]);
 
   useEffect(() => {
     if (state.status === 'gameOver') {
@@ -170,19 +182,14 @@ export function AsteroidsGameScreen({
 
   const renderAsteroid = (a: typeof state.asteroids[number]) => {
     const pool = a.size === 'large' ? LARGE_SPRITES : a.size === 'medium' ? MEDIUM_SPRITES : SMALL_SPRITES;
-    const spriteKey = pickSprite(a.id, pool);
-    const visualSize = a.r * 2.2 * scale;
     return (
-      <View
+      <AsteroidsSprite
         key={a.id}
-        style={{
-          position: 'absolute',
-          left: offX + a.x * scale - visualSize / 2,
-          top: offY + a.y * scale - visualSize / 2,
-        }}
-      >
-        <AsteroidsSprite spriteKey={spriteKey} size={visualSize} />
-      </View>
+        spriteKey={pickSprite(a.id, pool)}
+        size={a.r * 2.2 * scale}
+        x={offX + a.x * scale}
+        y={offY + a.y * scale}
+      />
     );
   };
 
@@ -203,62 +210,46 @@ export function AsteroidsGameScreen({
           <>
             {state.asteroids.map(renderAsteroid)}
 
-            {state.saucers.map((sc) => {
-              const saucerSize = (sc.kind === 'small' ? 32 : 46) * scale;
-              const saucerH = saucerSize * (80 / 96);
-              return (
-                <View
-                  key={sc.id}
-                  style={{
-                    position: 'absolute',
-                    left: offX + sc.x * scale - saucerSize / 2,
-                    top: offY + sc.y * scale - saucerH / 2,
-                  }}
-                >
-                  <AsteroidsSprite spriteKey="saucer" size={saucerSize} />
-                </View>
-              );
-            })}
+            {state.saucers.map((sc) => (
+              <AsteroidsSprite
+                key={sc.id}
+                spriteKey="saucer"
+                size={(sc.kind === 'small' ? 32 : 46) * scale}
+                x={offX + sc.x * scale}
+                y={offY + sc.y * scale}
+              />
+            ))}
 
             {state.bullets.map((b) => {
               const bSize = (b.enemy ? 7 : 6) * scale;
               return (
                 <View
                   key={b.id}
-                  style={{
-                    position: 'absolute',
-                    left: offX + b.x * scale - bSize / 2,
-                    top: offY + b.y * scale - bSize / 2,
-                    width: bSize,
-                    height: bSize,
-                    borderRadius: bSize / 2,
-                    backgroundColor: b.enemy ? '#ff4778' : '#ffffff',
-                    shadowColor: b.enemy ? '#ff4778' : '#ffffff',
-                    shadowOpacity: 0.9,
-                    shadowRadius: 4,
-                  }}
+                  style={[
+                    styles.bullet,
+                    {
+                      width: bSize,
+                      height: bSize,
+                      borderRadius: bSize / 2,
+                      backgroundColor: b.enemy ? '#ff4778' : '#ffffff',
+                      transform: [
+                        { translateX: offX + b.x * scale - bSize / 2 },
+                        { translateY: offY + b.y * scale - bSize / 2 },
+                      ],
+                    },
+                  ]}
                 />
               );
             })}
 
             {!state.death.active && !shipBlinking && (
-              <View
-                style={{
-                  position: 'absolute',
-                  left: offX + state.ship.x * scale - shipVisualSize / 2,
-                  top: offY + state.ship.y * scale - shipVisualSize / 2,
-                  width: shipVisualSize,
-                  height: shipVisualSize,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <AsteroidsSprite
-                  spriteKey={thrusting ? 'shipThrust' : 'ship'}
-                  size={shipVisualSize}
-                  rotation={state.ship.angle}
-                />
-              </View>
+              <AsteroidsSprite
+                spriteKey={thrusting ? 'shipThrust' : 'ship'}
+                size={shipVisualSize}
+                x={offX + state.ship.x * scale}
+                y={offY + state.ship.y * scale}
+                rotation={state.ship.angle}
+              />
             )}
 
             {state.death.active && (
@@ -342,6 +333,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#04070f',
     borderWidth: 1,
     borderColor: 'rgba(98,246,255,0.28)',
+  },
+  bullet: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
   },
   bottom: {
     width: '100%',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, ImageStyle, StyleSheet, View } from 'react-native';
 
 const SHEET = require('../assets/images/asteroids/sprites.png');
 const SHEET_W = 512;
@@ -46,60 +46,90 @@ export const SPRITE_FRAMES: Record<AsteroidsSpriteKey, Frame> = {
   bullet: { sx: 448, sy: 288, sw: 32, sh: 32 },
 };
 
+type Geometry = { dispW: number; dispH: number; imageStyle: ImageStyle };
+
+/**
+ * La géométrie d'un sprite ne dépend que de (clé, taille), jamais de sa
+ * position. On la calcule une fois et on la garde : le style de l'`Image`
+ * conserve ainsi la même identité d'un rendu à l'autre, donc React n'envoie
+ * aucune mise à jour à la couche native pour elle — seule la transformation
+ * du conteneur change.
+ */
+const geometryCache = new Map<string, Geometry>();
+
+function geometryFor(spriteKey: AsteroidsSpriteKey, size: number): Geometry {
+  const cacheKey = `${spriteKey}:${size.toFixed(2)}`;
+  const cached = geometryCache.get(cacheKey);
+  if (cached) return cached;
+
+  const frame = SPRITE_FRAMES[spriteKey];
+  const scale = size / Math.max(frame.sw, frame.sh);
+  const geometry: Geometry = {
+    dispW: frame.sw * scale,
+    dispH: frame.sh * scale,
+    imageStyle: {
+      width: SHEET_W * scale,
+      height: SHEET_H * scale,
+      marginLeft: -frame.sx * scale,
+      marginTop: -frame.sy * scale,
+    },
+  };
+  geometryCache.set(cacheKey, geometry);
+  return geometry;
+}
+
 type Props = {
   spriteKey: AsteroidsSpriteKey;
   size: number;
+  /** Centre du sprite, en pixels écran. */
+  x: number;
+  y: number;
   rotation?: number;
-  tint?: string;
 };
 
 /**
- * Renders a single sprite from the sheet, scaled to `size` (square).
- * Uses clipping + scaled Image with negative offsets.
+ * Découpe un sprite de la planche et le place à (x, y).
+ *
+ * Le positionnement passe par `transform: translate` et non par `left`/`top` :
+ * une translation ne touche pas à la mise en page, alors que left/top relance
+ * le calcul de layout de la vue à chaque frame — coûteux sur iOS quand une
+ * trentaine d'entités bougent en même temps.
  */
 export const AsteroidsSprite = React.memo(function AsteroidsSprite({
   spriteKey,
   size,
+  x,
+  y,
   rotation = 0,
-  tint,
 }: Props): React.ReactElement {
-  const frame = SPRITE_FRAMES[spriteKey];
-  const scale = size / Math.max(frame.sw, frame.sh);
-  const dispW = frame.sw * scale;
-  const dispH = frame.sh * scale;
-  const sheetW = SHEET_W * scale;
-  const sheetH = SHEET_H * scale;
+  const { dispW, dispH, imageStyle } = geometryFor(spriteKey, size);
 
   return (
     <View
+      pointerEvents="none"
       style={[
-        styles.clip,
+        styles.sprite,
         {
           width: dispW,
           height: dispH,
-          transform: [{ rotate: `${rotation}rad` }],
+          transform: [
+            { translateX: x - dispW / 2 },
+            { translateY: y - dispH / 2 },
+            { rotate: `${rotation}rad` },
+          ],
         },
       ]}
-      pointerEvents="none"
     >
-      <Image
-        source={SHEET}
-        style={{
-          width: sheetW,
-          height: sheetH,
-          marginLeft: -frame.sx * scale,
-          marginTop: -frame.sy * scale,
-          tintColor: tint,
-        }}
-        resizeMode="stretch"
-        fadeDuration={0}
-      />
+      <Image source={SHEET} style={imageStyle} resizeMode="stretch" fadeDuration={0} />
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  clip: {
+  sprite: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
     overflow: 'hidden',
   },
 });

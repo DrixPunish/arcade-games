@@ -22,8 +22,6 @@ export const CONFIG = {
     saucerDelayMin: 8,
     /** Au-delà de ce score, la petite soucoupe tire beaucoup plus juste. */
     saucerAccurateScore: 35000,
-    /** Risque que l'hyperespace détruise le vaisseau (borne : 8 chances sur 32). */
-    hyperspaceRisk: 0.25,
     asteroidSpawnSafeRadius: 120,
     deathAnimation: 0.85,
     finalDeathAnimation: 1.35,
