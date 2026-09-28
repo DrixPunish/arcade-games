@@ -215,14 +215,28 @@ export function useTrackFieldGame(): {
         // L'accumulateur redescend tout seul : arrêter de marteler fait
         // retomber la cadence mesurée, donc la vitesse.
         cadence.current = Math.max(0, cadence.current - (cadence.current * dt) / cfg.tapWindow);
+
+        // Dès qu'on tient le bouton pour régler l'angle, la vitesse est FIGÉE
+        // à celle du moment. C'est l'élan acquis qu'on emporte dans le saut :
+        // le joueur peut lâcher le martèlement et ne viser que l'angle.
+        // `n.settingAngle` est encore vrai sur l'image du RELÂCHEMENT : sans
+        // cela la vitesse se remettait à jour juste avant que le saut soit
+        // calculé, et le résultat dépendait encore du martèlement.
+        const lockingSpeed =
+          isFieldEvent(event) &&
+          (actionHeld.current || n.settingAngle) &&
+          n.phase === 'running';
+
         if (n.phase === 'running') {
-          const tapsPerSecond = cadence.current / cfg.tapWindow;
-          const wanted = Math.min(cfg.topSpeed, tapsPerSecond * cfg.speedPerTap);
-          n.speed = clamp(
-            n.speed + (wanted - n.speed) * Math.min(1, cfg.responsiveness * dt),
-            0,
-            cfg.topSpeed,
-          );
+          if (!lockingSpeed) {
+            const tapsPerSecond = cadence.current / cfg.tapWindow;
+            const wanted = Math.min(cfg.topSpeed, tapsPerSecond * cfg.speedPerTap);
+            n.speed = clamp(
+              n.speed + (wanted - n.speed) * Math.min(1, cfg.responsiveness * dt),
+              0,
+              cfg.topSpeed,
+            );
+          }
           n.runDistance += n.speed * dt;
           n.time += dt;
         }
