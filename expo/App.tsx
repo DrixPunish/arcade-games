@@ -1,13 +1,14 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Medal, Rocket, Shield } from 'lucide-react-native';
+import { Ghost, Medal, Rocket, Shield } from 'lucide-react-native';
 import { AsteroidsGameScreen } from './screens/AsteroidsGameScreen';
 import { GameMenuScreen } from './screens/GameMenuScreen';
 import { HighScoresScreen } from './screens/HighScoresScreen';
 import { HubScreen } from './screens/HubScreen';
+import { PacmanGameScreen } from './screens/PacmanGameScreen';
 import { SpaceInvadersGameScreen } from './screens/SpaceInvadersGameScreen';
 import { TrackFieldGameScreen } from './screens/TrackFieldGameScreen';
 
@@ -21,7 +22,10 @@ type Route =
   | 'invadersScores'
   | 'trackMenu'
   | 'trackGame'
-  | 'trackScores';
+  | 'trackScores'
+  | 'pacmanMenu'
+  | 'pacmanGame'
+  | 'pacmanScores';
 
 function renderRoute(route: Route, go: (next: Route) => void): React.ReactElement {
   switch (route) {
@@ -31,7 +35,7 @@ function renderRoute(route: Route, go: (next: Route) => void): React.ReactElemen
           onAsteroids={() => go('asteroidsMenu')}
           onInvaders={() => go('invadersMenu')}
           onOlympic={() => go('trackMenu')}
-          onPacman={() => Alert.alert('Pac-Man', 'Cette borne n’est pas encore développée.')}
+          onPacman={() => go('pacmanMenu')}
         />
       );
     case 'asteroidsMenu':
@@ -86,6 +90,20 @@ function renderRoute(route: Route, go: (next: Route) => void): React.ReactElemen
       );
     case 'trackGame':
       return <TrackFieldGameScreen onExit={() => go('trackMenu')} onScores={() => go('trackScores')} />;
+    case 'pacmanMenu':
+      return (
+        <GameMenuScreen
+          title="Pac-Man"
+          icon={<Ghost color="#ffb7ff" size={54} />}
+          onPlay={() => go('pacmanGame')}
+          onScores={() => go('pacmanScores')}
+          onBack={() => go('hub')}
+        />
+      );
+    case 'pacmanScores':
+      return <HighScoresScreen game="pacman" title="Pac-Man" onBack={() => go('pacmanMenu')} />;
+    case 'pacmanGame':
+      return <PacmanGameScreen onExit={() => go('pacmanMenu')} onScores={() => go('pacmanScores')} />;
   }
 }
 

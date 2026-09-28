@@ -20,7 +20,7 @@ import {
   spritePath,
 } from '../games/space-invaders/sprites';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
-import { getAsteroidsSounds } from '../lib/gameSounds';
+import { getArcadeSounds } from '../lib/gameSounds';
 
 const D = INVADERS_DIMENSIONS;
 
@@ -114,7 +114,7 @@ export function SpaceInvadersGameScreen({
 
   const sounds = useMemo(() => {
     try {
-      return getAsteroidsSounds();
+      return getArcadeSounds();
     } catch (e) {
       console.warn('[SpaceInvadersGameScreen] audio indisponible', e);
       return null;

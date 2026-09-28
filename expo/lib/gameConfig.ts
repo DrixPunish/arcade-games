@@ -164,6 +164,68 @@ export const CONFIG = {
     /** Trois essais aux concours, une seule manche aux courses. */
     fieldAttempts: 3,
   },
+
+  pacman: {
+    /**
+     * Vitesse de référence de la borne : 75,76 pixels par seconde sur des
+     * cases de 8 pixels, soit 9,47 cases par seconde. Tout le reste du jeu
+     * s'exprime en POURCENTAGE de cette vitesse, exactement comme dans la
+     * table de réglages d'origine.
+     */
+    baseSpeed: 9.4697,
+    /**
+     * Les pourcentages du niveau 1. Ils montent avec les niveaux
+     * (cf. `levelSpeeds`) : c'est ce qui rend la partie tendue à la longue
+     * sans jamais changer le labyrinthe.
+     */
+    speed: {
+      pac: 0.8,
+      pacFrightened: 0.9,
+      ghost: 0.75,
+      ghostFrightened: 0.5,
+      /** Les fantômes ralentissent fortement dans le tunnel : on peut y souffler. */
+      ghostTunnel: 0.4,
+      /** Les yeux rentrent à la maison bien plus vite que le fantôme entier. */
+      ghostEyes: 1.9,
+    },
+    /**
+     * Durée de l'effet super-gomme, par niveau (secondes). Elle fond vite :
+     * au niveau 19 les fantômes ne deviennent plus bleus du tout.
+     */
+    frightSeconds: [6, 5, 4, 3, 2, 5, 2, 2, 1, 5, 2, 1, 1, 3, 1, 1, 0, 1, 0],
+    /**
+     * Alternance dispersion / poursuite du niveau 1, en secondes. La dernière
+     * poursuite ne s'arrête jamais. C'est cette respiration qui rend les
+     * fantômes lisibles : ils lâchent périodiquement la traque.
+     */
+    scatterChase: [7, 20, 7, 20, 5, 20, 5],
+    dotPoints: 10,
+    powerPoints: 50,
+    /** Doublement à chaque fantôme d'une même super-gomme. */
+    ghostPoints: [200, 400, 800, 1600],
+    /**
+     * Nombre de pac-gommes avalées avant que chaque fantôme quitte la maison.
+     * Blinky en est déjà sorti au départ.
+     */
+    releaseDots: { pinky: 0, inky: 30, clyde: 60 },
+    /** Au-delà, un fantôme resté enfermé sort quand même (secondes). */
+    releaseTimeout: 4,
+    /** Le fruit apparaît deux fois par niveau, à ces compteurs de gommes. */
+    fruitAtDots: [70, 170],
+    fruitSeconds: 9.5,
+    /** Valeur du fruit selon le niveau, plafonnée à 5000 comme sur la borne. */
+    fruitPoints: [100, 300, 500, 500, 700, 700, 1000, 1000, 2000, 2000, 3000, 3000, 5000],
+    lives: 3,
+    extraLifeAt: 10000,
+    /** Écart en cases sous lequel Pac-Man est attrapé. */
+    catchDistance: 0.5,
+    /** Temporisations d'ambiance : le « READY! », la mort, le tableau fini. */
+    readySeconds: 2,
+    dyingSeconds: 1.7,
+    clearSeconds: 1.8,
+    /** Temps d'arrêt sur image quand un fantôme est gobé. */
+    ghostEatenPause: 0.55,
+  },
 } as const;
 
 export type GameStatus = 'running' | 'paused' | 'gameOver';

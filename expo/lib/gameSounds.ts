@@ -1,7 +1,10 @@
 import { Platform } from 'react-native';
 
-/** Sons d'Asteroids, puis ceux de Space Invaders (préfixe `si`). */
-export type AsteroidsSoundKey =
+/**
+ * Tous les bruitages des bornes, synthétisés : Asteroids sans préfixe,
+ * Space Invaders en `si`, Pac-Man en `pac`.
+ */
+export type ArcadeSoundKey =
   | 'fire'
   | 'thrust'
   | 'bangLarge'
@@ -18,9 +21,16 @@ export type AsteroidsSoundKey =
   | 'siInvaderDie'
   | 'siPlayerDie'
   | 'siUfo'
-  | 'siUfoDie';
+  | 'siUfoDie'
+  | 'pacWakaA'
+  | 'pacWakaB'
+  | 'pacPower'
+  | 'pacEatGhost'
+  | 'pacFruit'
+  | 'pacDeath'
+  | 'pacExtraLife';
 
-const ALL_KEYS: AsteroidsSoundKey[] = [
+const ALL_KEYS: ArcadeSoundKey[] = [
   'fire',
   'thrust',
   'bangLarge',
@@ -38,9 +48,16 @@ const ALL_KEYS: AsteroidsSoundKey[] = [
   'siPlayerDie',
   'siUfo',
   'siUfoDie',
+  'pacWakaA',
+  'pacWakaB',
+  'pacPower',
+  'pacEatGhost',
+  'pacFruit',
+  'pacDeath',
+  'pacExtraLife',
 ];
 
-const POOL_SIZE: Record<AsteroidsSoundKey, number> = {
+const POOL_SIZE: Record<ArcadeSoundKey, number> = {
   fire: 4,
   thrust: 1,
   bangLarge: 3,
@@ -60,9 +77,19 @@ const POOL_SIZE: Record<AsteroidsSoundKey, number> = {
   siPlayerDie: 1,
   siUfo: 1,
   siUfoDie: 1,
+  // Le « waka » part à chaque gomme, soit jusqu'à huit fois par seconde :
+  // sans plusieurs lecteurs, chaque note couperait la précédente et on
+  // n'entendrait qu'un cliquetis.
+  pacWakaA: 3,
+  pacWakaB: 3,
+  pacPower: 1,
+  pacEatGhost: 2,
+  pacFruit: 2,
+  pacDeath: 1,
+  pacExtraLife: 1,
 };
 
-const LOOPING: Partial<Record<AsteroidsSoundKey, boolean>> = {
+const LOOPING: Partial<Record<ArcadeSoundKey, boolean>> = {
   thrust: true,
   saucerBig: true,
   saucerSmall: true,
@@ -86,8 +113,8 @@ function logOnce(topic: string, ...args: unknown[]): void {
 
 interface SoundBackend {
   init(): Promise<void>;
-  play(key: AsteroidsSoundKey): void;
-  setLoop(key: AsteroidsSoundKey, active: boolean): void;
+  play(key: ArcadeSoundKey): void;
+  setLoop(key: ArcadeSoundKey, active: boolean): void;
   stopAllLoops(): void;
   isReady(): boolean;
 }
@@ -209,7 +236,7 @@ function concat(a: Float32Array, b: Float32Array, gapSec: number): Float32Array 
   return out;
 }
 
-function synthOneShot(key: AsteroidsSoundKey): Float32Array {
+function synthOneShot(key: ArcadeSoundKey): Float32Array {
   switch (key) {
     case 'fire':
       return genOscSweep('square', 880, 220, 0.12, 0.25);
@@ -243,12 +270,38 @@ function synthOneShot(key: AsteroidsSoundKey): Float32Array {
       return mix(genNoise(0.7, 0.45, 1100), genOscSweep('sawtooth', 320, 60, 0.7, 0.3));
     case 'siUfoDie':
       return mix(genNoise(0.4, 0.35, 1800), genOscSweep('square', 900, 180, 0.4, 0.26));
+    // Le « waka waka » : deux notes très courtes, l'une descendante et
+    // l'autre montante. C'est leur ALTERNANCE qui fait le bruit de bouche,
+    // pas leur timbre.
+    case 'pacWakaA':
+      return genOscSweep('square', 460, 200, 0.06, 0.2);
+    case 'pacWakaB':
+      return genOscSweep('square', 200, 460, 0.06, 0.2);
+    case 'pacPower':
+      return genOscSweep('sawtooth', 180, 620, 0.3, 0.22);
+    case 'pacEatGhost':
+      return genOscSweep('square', 180, 1300, 0.34, 0.24);
+    case 'pacFruit':
+      return concat(
+        genOscSweep('square', 520, 520, 0.08, 0.24),
+        genOscSweep('square', 780, 780, 0.12, 0.24),
+        0.02,
+      );
+    // La longue plainte descendante de la mort de Pac-Man.
+    case 'pacDeath':
+      return genOscSweep('sawtooth', 700, 70, 1.1, 0.26);
+    case 'pacExtraLife':
+      return concat(
+        genOscSweep('sine', 740, 740, 0.14, 0.28),
+        genOscSweep('sine', 1100, 1100, 0.2, 0.28),
+        0.04,
+      );
     default:
       return new Float32Array(0);
   }
 }
 
-function synthLoop(key: AsteroidsSoundKey): Float32Array {
+function synthLoop(key: ArcadeSoundKey): Float32Array {
   switch (key) {
     case 'thrust':
       return genNoiseLoop(0.5, 0.18, 380);
@@ -319,7 +372,7 @@ class WebSoundBackend implements SoundBackend {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private ready: boolean = false;
-  private loops: Map<AsteroidsSoundKey, { stop: () => void }> = new Map();
+  private loops: Map<ArcadeSoundKey, { stop: () => void }> = new Map();
 
   async init(): Promise<void> {
     if (this.ready) return;
@@ -403,7 +456,7 @@ class WebSoundBackend implements SoundBackend {
     src.stop(t0 + duration + 0.05);
   }
 
-  private playKey(key: AsteroidsSoundKey): void {
+  private playKey(key: ArcadeSoundKey): void {
     switch (key) {
       case 'fire':
         this.envOsc('square', 880, 220, 0.12, 0.25);
@@ -453,12 +506,39 @@ class WebSoundBackend implements SoundBackend {
         this.envNoise(0.4, 0.35, 1800);
         this.envOsc('square', 900, 180, 0.4, 0.26);
         break;
+      case 'pacWakaA':
+        this.envOsc('square', 460, 200, 0.06, 0.2);
+        break;
+      case 'pacWakaB':
+        this.envOsc('square', 200, 460, 0.06, 0.2);
+        break;
+      case 'pacPower':
+        this.envOsc('sawtooth', 180, 620, 0.3, 0.22);
+        break;
+      case 'pacEatGhost':
+        this.envOsc('square', 180, 1300, 0.34, 0.24);
+        break;
+      case 'pacFruit':
+        this.envOsc('square', 520, 520, 0.08, 0.24);
+        setTimeout(() => {
+          try { this.envOsc('square', 780, 780, 0.12, 0.24); } catch {}
+        }, 90);
+        break;
+      case 'pacDeath':
+        this.envOsc('sawtooth', 700, 70, 1.1, 0.26);
+        break;
+      case 'pacExtraLife':
+        this.envOsc('sine', 740, 740, 0.14, 0.28);
+        setTimeout(() => {
+          try { this.envOsc('sine', 1100, 1100, 0.2, 0.28); } catch {}
+        }, 160);
+        break;
       default:
         break;
     }
   }
 
-  play(key: AsteroidsSoundKey): void {
+  play(key: ArcadeSoundKey): void {
     if (!this.ready || !this.ctx) return;
     this.ensureRunning();
     try {
@@ -468,7 +548,7 @@ class WebSoundBackend implements SoundBackend {
     }
   }
 
-  private startLoop(key: AsteroidsSoundKey): { stop: () => void } | null {
+  private startLoop(key: ArcadeSoundKey): { stop: () => void } | null {
     const ctx = this.ctx;
     const master = this.master;
     if (!ctx || !master) return null;
@@ -523,7 +603,7 @@ class WebSoundBackend implements SoundBackend {
     };
   }
 
-  setLoop(key: AsteroidsSoundKey, active: boolean): void {
+  setLoop(key: ArcadeSoundKey, active: boolean): void {
     if (!this.ready || !this.ctx) return;
     this.ensureRunning();
     const existing = this.loops.get(key);
@@ -553,8 +633,8 @@ class WebSoundBackend implements SoundBackend {
  * play via expo-audio. No file system dependency.
  * ========================================================== */
 class NativeSoundBackend implements SoundBackend {
-  private pools: Partial<Record<AsteroidsSoundKey, { players: any[]; cursor: number }>> = {};
-  private loopActive: Partial<Record<AsteroidsSoundKey, boolean>> = {};
+  private pools: Partial<Record<ArcadeSoundKey, { players: any[]; cursor: number }>> = {};
+  private loopActive: Partial<Record<ArcadeSoundKey, boolean>> = {};
   private ready: boolean = false;
 
   async init(): Promise<void> {
@@ -630,7 +710,7 @@ class NativeSoundBackend implements SoundBackend {
     debugLog(`${TAG} [native] init() done — keys ready:`, Object.keys(this.pools));
   }
 
-  private playOne(player: any, key: AsteroidsSoundKey, fromLoop: boolean): void {
+  private playOne(player: any, key: ArcadeSoundKey, fromLoop: boolean): void {
     try {
       if (!fromLoop) {
         try {
@@ -646,7 +726,7 @@ class NativeSoundBackend implements SoundBackend {
     }
   }
 
-  play(key: AsteroidsSoundKey): void {
+  play(key: ArcadeSoundKey): void {
     if (!this.ready) return;
     const pool = this.pools[key];
     if (!pool || pool.players.length === 0) return;
@@ -655,7 +735,7 @@ class NativeSoundBackend implements SoundBackend {
     this.playOne(player, key, false);
   }
 
-  setLoop(key: AsteroidsSoundKey, active: boolean): void {
+  setLoop(key: ArcadeSoundKey, active: boolean): void {
     if (!this.ready) return;
     const pool = this.pools[key];
     if (!pool || pool.players.length === 0) return;
@@ -674,7 +754,7 @@ class NativeSoundBackend implements SoundBackend {
   }
 
   stopAllLoops(): void {
-    (Object.keys(this.loopActive) as AsteroidsSoundKey[]).forEach((key) => {
+    (Object.keys(this.loopActive) as ArcadeSoundKey[]).forEach((key) => {
       if (this.loopActive[key]) this.setLoop(key, false);
     });
   }
@@ -687,7 +767,7 @@ class NativeSoundBackend implements SoundBackend {
 /* ============================================================
  * Public manager — picks backend per platform
  * ========================================================== */
-class AsteroidsSoundManager {
+class ArcadeSoundManager {
   private backend: SoundBackend | null = null;
   private initStarted: boolean = false;
 
@@ -710,7 +790,7 @@ class AsteroidsSoundManager {
     });
   }
 
-  play(key: AsteroidsSoundKey): void {
+  play(key: ArcadeSoundKey): void {
     if (!this.backend) return;
     try {
       this.backend.play(key);
@@ -719,7 +799,7 @@ class AsteroidsSoundManager {
     }
   }
 
-  setLoop(key: AsteroidsSoundKey, active: boolean): void {
+  setLoop(key: ArcadeSoundKey, active: boolean): void {
     if (!this.backend) return;
     try {
       this.backend.setLoop(key, active);
@@ -742,11 +822,11 @@ class AsteroidsSoundManager {
   }
 }
 
-let singleton: AsteroidsSoundManager | null = null;
+let singleton: ArcadeSoundManager | null = null;
 
-export function getAsteroidsSounds(): AsteroidsSoundManager {
-  if (!singleton) singleton = new AsteroidsSoundManager();
+export function getArcadeSounds(): ArcadeSoundManager {
+  if (!singleton) singleton = new ArcadeSoundManager();
   return singleton;
 }
 
-export type { AsteroidsSoundManager };
+export type { ArcadeSoundManager };

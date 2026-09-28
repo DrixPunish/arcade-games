@@ -5,8 +5,8 @@ import { bitmapCols, bitmapRows, spritePath } from '../lib/pixelArt';
 import { TileArt } from '../lib/tileArt';
 
 /**
- * Une borne du menu : son dessin en pixel art, son nom, et soit le meilleur
- * score déjà réalisé, soit la mention « bientôt » si le jeu n'existe pas encore.
+ * Une borne du menu : son dessin en pixel art, son nom et le meilleur score
+ * déjà réalisé dessus.
  */
 export function GameTile({
   art,
@@ -14,15 +14,13 @@ export function GameTile({
   status,
   width,
   onPress,
-  comingSoon = false,
 }: {
   art: TileArt;
   title: string;
-  /** Ligne du bas : meilleur score, « Nouveau », ou « Bientôt ». */
+  /** Ligne du bas : le meilleur score, ou « Jamais joué ». */
   status: string;
   width: number;
   onPress: () => void;
-  comingSoon?: boolean;
 }): React.ReactElement {
   const artSize = Math.round(width * 0.46);
   const cols = bitmapCols(art.bitmap);
@@ -35,11 +33,10 @@ export function GameTile({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={comingSoon ? `${title}, bientôt disponible` : title}
+      accessibilityLabel={title}
       style={({ pressed }) => [
         styles.tile,
         { width, borderColor: art.color, shadowColor: art.color },
-        comingSoon && styles.dimmed,
         pressed && styles.pressed,
       ]}
     >
@@ -52,7 +49,7 @@ export function GameTile({
       <Text style={styles.title} numberOfLines={2}>
         {title}
       </Text>
-      <Text style={[styles.status, comingSoon ? styles.soon : { color: art.color }]}>{status}</Text>
+      <Text style={[styles.status, { color: art.color }]}>{status}</Text>
     </Pressable>
   );
 }
@@ -72,7 +69,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 6,
   },
-  dimmed: { opacity: 0.55 },
   pressed: { transform: [{ scale: 0.97 }] },
   artBox: { alignItems: 'center', justifyContent: 'center' },
   title: {
@@ -85,5 +81,4 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   status: { fontWeight: '800', fontSize: 12, marginTop: 6, letterSpacing: 1 },
-  soon: { color: '#8fa6bb' },
 });

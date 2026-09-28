@@ -7,7 +7,7 @@ import { HighScorePrompt } from '../components/HighScorePrompt';
 import { AsteroidsSprite, type AsteroidsSpriteKey } from '../components/AsteroidsSprite';
 import { ASTEROIDS_DIMENSIONS, useAsteroidsGame } from '../games/asteroids/useAsteroidsGame';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
-import { getAsteroidsSounds } from '../lib/gameSounds';
+import { getArcadeSounds } from '../lib/gameSounds';
 
 /** Diamètre de référence de l'onde de choc ; l'animation ne fait que la mettre à l'échelle. */
 const DEATH_RING = 100;
@@ -42,7 +42,7 @@ export function AsteroidsGameScreen({
 
   const sounds = useMemo(() => {
     try {
-      return getAsteroidsSounds();
+      return getArcadeSounds();
     } catch (e) {
       console.warn('[AsteroidsGameScreen] failed to get audio manager', e);
       return null;

@@ -390,6 +390,49 @@ export function TrackFieldControls({
   return <MultiTouchPad rows={TRACK_ROWS} onHoldChange={onHoldChange} onTap={onTap} />;
 }
 
+/* ------------------------------------------------------------- Pac-Man --- */
+
+/**
+ * Une croix directionnelle à quatre branches. Les boutons sont en mode
+ * maintenu et non en appui simple : la direction demandée reste affichée tant
+ * que le doigt est posé, ce qui donne le même retour visuel qu'un vrai
+ * joystick — et le moteur, lui, l'applique au prochain centre de case.
+ */
+const PACMAN_ROWS: PadRow[] = [
+  [{ key: 'up', label: '▲', mode: 'hold' }],
+  [
+    { key: 'left', label: '◀', mode: 'hold' },
+    { key: 'down', label: '▼', mode: 'hold' },
+    { key: 'right', label: '▶', mode: 'hold' },
+  ],
+];
+
+export function PacmanControls({
+  onSteer,
+  debugHitboxes,
+}: {
+  onSteer: (dir: 'up' | 'down' | 'left' | 'right') => void;
+  debugHitboxes?: boolean;
+}): React.ReactElement {
+  const onHoldChange = useCallback(
+    (key: string, activeNow: boolean): void => {
+      // Seul l'appui compte : relâcher ne doit pas annuler la direction, sinon
+      // Pac-Man s'arrêterait dès qu'on lève le pouce.
+      if (activeNow) onSteer(key as 'up' | 'down' | 'left' | 'right');
+    },
+    [onSteer],
+  );
+  const onTap = useCallback((): void => {}, []);
+  return (
+    <MultiTouchPad
+      rows={PACMAN_ROWS}
+      onHoldChange={onHoldChange}
+      onTap={onTap}
+      debugHitboxes={debugHitboxes}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   panel: { width: '100%', maxWidth: 620, gap: 10, marginTop: 8, marginBottom: 10 },
   row: { flexDirection: 'row', gap: 10, width: '100%' },

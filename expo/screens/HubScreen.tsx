@@ -32,12 +32,14 @@ export function HubScreen({
       getLocalHighScores('asteroids'),
       getLocalHighScores('spaceInvaders'),
       getLocalHighScores('trackField'),
-    ]).then(([a, s, t]) => {
+      getLocalHighScores('pacman'),
+    ]).then(([a, s, t, p]) => {
       if (!cancelled) {
         setBest({
           asteroids: a[0]?.score ?? 0,
           spaceInvaders: s[0]?.score ?? 0,
           trackField: t[0]?.score ?? 0,
+          pacman: p[0]?.score ?? 0,
         });
       }
     });
@@ -91,10 +93,9 @@ export function HubScreen({
         <GameTile
           art={TILE_ART.pacman}
           title="Pac-Man"
-          status="Bientôt"
+          status={scoreLabel(best.pacman ?? 0)}
           width={tileWidth}
           onPress={onPacman}
-          comingSoon
         />
       </View>
     </View>
