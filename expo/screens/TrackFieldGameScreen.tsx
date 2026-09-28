@@ -6,7 +6,7 @@ import { ArcadeButton } from '../components/ArcadeButton';
 import { HighScorePrompt } from '../components/HighScorePrompt';
 import { TrackFieldControls } from '../components/TouchPad';
 import { CONFIG } from '../lib/gameConfig';
-import { spritePath } from '../lib/pixelArt';
+import { spritePath, spritePathsByKey } from '../lib/pixelArt';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 import {
   EVENT_LABEL,
@@ -16,7 +16,7 @@ import {
   isFieldEvent,
   useTrackFieldGame,
 } from '../games/track-field/useTrackFieldGame';
-import { ATHLETE_JUMP, JAVELIN, RUN_FRAMES } from '../games/track-field/sprites';
+import { ATHLETE_JUMP, ATHLETE_PALETTE, JAVELIN, RUN_FRAMES } from '../games/track-field/sprites';
 
 import {
   ATHLETE_PIXEL,
@@ -30,6 +30,7 @@ import {
   MARKERS,
   PX_PER_M,
   SKY,
+  TAKEOFF_ZONE,
   TRACK_TOP,
   W,
   WALL_TOP,
@@ -159,9 +160,34 @@ export function TrackFieldGameScreen({
             );
           })}
 
-          {/* Sautoir : planche d'appel puis bac à sable */}
+          {/* Zone d'appel : c'est là que la vitesse se fige quand on tient
+              le bouton, il faut donc la voir venir de loin. */}
           {isFieldEvent(event) && (
             <>
+              <Rect
+                x={toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH - TAKEOFF_ZONE)}
+                y={GROUND - 1}
+                width={TAKEOFF_ZONE * PX_PER_M}
+                height={H - GROUND + 1}
+                fill="rgba(255,224,131,0.22)"
+              />
+              {[0, 1, 2, 3, 4].map((i) => (
+                <Rect
+                  key={`chev${i}`}
+                  x={toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH - TAKEOFF_ZONE + i * 1.6)}
+                  y={GROUND + 4}
+                  width={6}
+                  height={3}
+                  fill="#ffe083"
+                />
+              ))}
+              <Rect
+                x={toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH) - 1}
+                y={GROUND - 30}
+                width={2}
+                height={30}
+                fill="rgba(255,71,120,0.75)"
+              />
               <Rect
                 x={toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH)}
                 y={GROUND - 1}
@@ -232,10 +258,11 @@ export function TrackFieldGameScreen({
           )}
 
           {/* L'athlète */}
-          <Path
-            d={spritePath(athleteBitmap, athleteX, athleteY, ATHLETE_PIXEL, ATHLETE_PIXEL)}
-            fill="#eaffff"
-          />
+          {Object.entries(
+            spritePathsByKey(athleteBitmap, athleteX, athleteY, ATHLETE_PIXEL, ATHLETE_PIXEL),
+          ).map(([key, d]) => (
+            <Path key={key} d={d} fill={ATHLETE_PALETTE[key] ?? COLORS.athlete} />
+          ))}
 
           {/* Jauge de vitesse */}
           <Rect x={10} y={10} width={126} height={12} rx={6} fill="rgba(0,0,0,0.45)" />

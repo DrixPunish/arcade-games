@@ -40,6 +40,9 @@ export const CROWD = Array.from({ length: 160 }, (_, i) => {
 export const FLOODLIGHTS = [168, 300].map((x) => ({ x, y: 6 }));
 
 /** Lignes de couloir de la piste. */
+/** Longueur de la zone d'appel signalée avant la planche, en mètres. */
+export const TAKEOFF_ZONE = 8;
+
 export const LANES = [TRACK_TOP + 18, GROUND, GROUND + 22];
 
 

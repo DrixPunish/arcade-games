@@ -6,52 +6,64 @@ import { Bitmap } from '../../lib/pixelArt';
  * Invaders : une grille de texte, un seul tracé SVG au rendu.
  */
 
-/** Foulée ouverte : bras et jambes opposés, membres rattachés au corps. */
+/**
+ * Les lettres désignent une teinte : `S` la peau, `J` le maillot, `P` le short.
+ * `ATHLETE_PALETTE` fait la correspondance. L'athlète tout blanc manquait de
+ * caractère sur la piste ocre.
+ */
+export const ATHLETE_PALETTE: Record<string, string> = {
+  H: '#3a2a20',
+  S: '#f2b98d',
+  J: '#eaffff',
+  P: '#1f4fa8',
+};
+
+/** Foulée ouverte : bras et jambes opposés. */
 const RUN_A: Bitmap = [
-  '..XXX...',
-  '.XXXXX..',
-  '.XXXXX..',
-  '..XXX...',
-  'XXXXXX..',
-  '.XXXXXX.',
-  '.XXXXX..',
-  '..XXXX..',
-  '..XX.XX.',
-  '.XX...XX',
-  'XX.....X',
-  'X.......',
+  '..HHH...',
+  '.HHHHS..',
+  '.HSSSS..',
+  '..SSS...',
+  'JJJJJJ..',
+  '.JJJJJJ.',
+  '.JJJJJ..',
+  '..PPPP..',
+  '..SS.SS.',
+  '.SS...SS',
+  'SS.....S',
+  'S.......',
 ];
 
 /** Foulée fermée : appui au sol, bras ramenés. */
 const RUN_B: Bitmap = [
-  '..XXX...',
-  '.XXXXX..',
-  '.XXXXX..',
-  '..XXX...',
-  '..XXXXXX',
-  '.XXXXXX.',
-  '..XXXX..',
-  '..XXXX..',
-  '..XXXX..',
-  '..XX.XX.',
-  '.XX...XX',
-  '.X.....X',
+  '..HHH...',
+  '.HHHHS..',
+  '.HSSSS..',
+  '..SSS...',
+  '..JJJJJJ',
+  '.JJJJJJ.',
+  '..JJJJ..',
+  '..PPPP..',
+  '..SSSS..',
+  '..SS.SS.',
+  '.SS...SS',
+  '.S.....S',
 ];
 
 /** En l'air : corps groupé, jambes tendues vers l'avant. */
 const JUMP: Bitmap = [
-  '..XXX...',
-  '.XXXXX..',
-  '.XXXXX..',
-  '..XXX...',
-  'XXXXXX..',
-  '.XXXXXX.',
-  '.XXXXXX.',
-  '..XXXXXX',
-  '..XX..XX',
-  '.XX...XX',
-  'XX......',
-  'X.......',
+  '..HHH...',
+  '.HHHHS..',
+  '.HSSSS..',
+  '..SSS...',
+  'JJJJJJ..',
+  '.JJJJJJ.',
+  '.JJJJJJ.',
+  '..PPPPSS',
+  '..SS..SS',
+  '.SS...SS',
+  'SS......',
+  'S.......',
 ];
 
 /** Le javelot en vol, incliné : un simple trait effilé. */

@@ -147,6 +147,20 @@ export const CONFIG = {
       javelin: 46,
       hurdles: 14.5,
     },
+    /**
+     * Longueur du saut de haies, en MÈTRES et non en secondes. Une durée fixe
+     * donnait un saut de 1,9 m à faible allure : on retombait sur la haie sans
+     * pouvoir rien y faire. En distance, le franchissement vaut à toute vitesse.
+     * Les haies sont espacées de 9,14 m, ce qui laisse de quoi se replacer.
+     */
+    hurdleJumpSpan: 5,
+    /** Durée maximale d'un saut, garde-fou si la vitesse tombe très bas. */
+    hurdleJumpMaxTime: 1.4,
+    /**
+     * Ce qu'il reste de vitesse après avoir renversé une haie. Mettre zéro
+     * était un mur : on ne repartait plus.
+     */
+    hurdleHitPenalty: 0.45,
     /** Trois essais aux concours, une seule manche aux courses. */
     fieldAttempts: 3,
   },

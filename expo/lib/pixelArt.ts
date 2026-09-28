@@ -50,3 +50,40 @@ export function spritePath(
 
 /** Deux décimales suffisent et gardent les chaînes de tracé courtes. */
 const round = (n: number): number => Math.round(n * 100) / 100;
+
+/**
+ * Comme `spritePath`, mais pour un sprite à plusieurs couleurs : chaque
+ * caractère de la grille (autre que `.`) désigne une teinte, et on obtient un
+ * tracé par teinte. Un athlète en trois couleurs coûte ainsi trois `<Path>`
+ * au lieu d'un — très loin du nœud par pixel.
+ */
+export function spritePathsByKey(
+  bitmap: Bitmap,
+  x: number,
+  y: number,
+  cellW: number,
+  cellH: number,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (let row = 0; row < bitmap.length; row += 1) {
+    const line = bitmap[row];
+    let col = 0;
+    while (col < line.length) {
+      const key = line[col];
+      if (key === '.') {
+        col += 1;
+        continue;
+      }
+      let end = col;
+      while (end + 1 < line.length && line[end + 1] === key) end += 1;
+      const px = x + col * cellW;
+      const py = y + row * cellH;
+      const w = (end - col + 1) * cellW;
+      out[key] =
+        (out[key] ?? '') +
+        `M${round(px)} ${round(py)}h${round(w)}v${round(cellH)}h${round(-w)}z`;
+      col = end + 1;
+    }
+  }
+  return out;
+}

@@ -192,6 +192,8 @@ export function useTrackFieldGame(): {
   const cadence = useRef(0);
   const actionHeld = useRef(false);
   const actionPressed = useRef(false);
+  /** Position et durée de l'appel, pour un franchissement mesuré en distance. */
+  const jump = useRef({ from: 0, time: 0 });
 
   const tapRun = (which: 'a' | 'b'): void => {
     if (lastRun.current !== which) {
@@ -257,12 +259,17 @@ export function useTrackFieldGame(): {
           }
 
           case 'hurdles': {
-            // Un saut dure le temps d'un franchissement ; toucher une haie
-            // casse l'élan, exactement comme sur la borne.
-            if (actionPressed.current && !n.airborne && n.phase === 'running') n.airborne = true;
+            // Le franchissement se mesure en DISTANCE parcourue, pas en temps :
+            // il vaut donc autant à faible allure qu'à pleine vitesse.
+            if (actionPressed.current && !n.airborne && n.phase === 'running') {
+              n.airborne = true;
+              jump.current = { from: n.runDistance, time: 0 };
+            }
             if (n.airborne) {
-              n.flightHeight = Math.min(1, n.flightHeight + dt * 3.2);
-              if (n.flightHeight >= 1) {
+              jump.current.time += dt;
+              const progress = (n.runDistance - jump.current.from) / cfg.hurdleJumpSpan;
+              n.flightHeight = Math.min(1, progress);
+              if (progress >= 1 || jump.current.time > cfg.hurdleJumpMaxTime) {
                 n.airborne = false;
                 n.flightHeight = 0;
               }
@@ -270,7 +277,8 @@ export function useTrackFieldGame(): {
             n.hurdles = n.hurdles.map((h) => {
               if (h.cleared || n.runDistance < h.x) return h;
               if (!n.airborne) {
-                n.speed = 0;
+                // On trébuche, on ne s'arrête pas net.
+                n.speed *= cfg.hurdleHitPenalty;
                 n.message = 'Haie renversée !';
               }
               return { ...h, cleared: true };
@@ -377,6 +385,7 @@ export function useTrackFieldGame(): {
       restart: () => {
         lastRun.current = null;
         cadence.current = 0;
+        jump.current = { from: 0, time: 0 };
         actionHeld.current = false;
         actionPressed.current = false;
         setState(initial());
