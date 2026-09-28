@@ -18,14 +18,22 @@ import {
 } from '../games/track-field/useTrackFieldGame';
 import { ATHLETE_JUMP, JAVELIN, RUN_FRAMES } from '../games/track-field/sprites';
 
-/** Terrain logique : 360 de large, sol à 150, comme les autres jeux. */
-const W = 360;
-const H = 190;
-const GROUND = 150;
-const PX_PER_M = 9;
-const ATHLETE_PIXEL = 3;
-/** Repères tous les 10 m, calculés une seule fois. */
-const MARKERS = Array.from({ length: 24 }, (_, i) => i * 10);
+import {
+  ATHLETE_PIXEL,
+  COLORS,
+  CROWD,
+  FLOODLIGHTS,
+  CROWD_TOP,
+  GROUND,
+  H,
+  LANES,
+  MARKERS,
+  PX_PER_M,
+  SKY,
+  TRACK_TOP,
+  W,
+  WALL_TOP,
+} from '../games/track-field/stadium';
 
 export function TrackFieldGameScreen({
   onExit,
@@ -82,7 +90,9 @@ export function TrackFieldGameScreen({
     state.phase === 'flying' && event === 'longJump'
       ? toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH + state.flightDistance)
       : toScreen(state.runDistance);
-  const athleteY = GROUND - 36 - hopHeight - flightLift;
+  // 12 rangées de sprite : les pieds tombent pile sur la ligne de course.
+  const ATHLETE_H = 12 * ATHLETE_PIXEL;
+  const athleteY = GROUND - ATHLETE_H - hopHeight - flightLift;
 
   const speedRatio = Math.min(1, state.speed / CONFIG.trackField.topSpeed);
   const finished = state.phase === 'result' || state.phase === 'eventOver';
@@ -99,7 +109,11 @@ export function TrackFieldGameScreen({
 
       <View style={styles.hud}>
         <Text style={styles.metric}>
-          {unit === 's' ? `${state.time.toFixed(2)} s` : `${state.runDistance.toFixed(1)} m`}
+          {isFieldEvent(event)
+            ? state.best > 0
+              ? `Record ${state.best.toFixed(2)} m`
+              : `Élan ${Math.min(state.runDistance, TRACK_DIMENSIONS.RUNWAY_LENGTH).toFixed(0)} / ${TRACK_DIMENSIONS.RUNWAY_LENGTH} m`
+            : `${state.time.toFixed(2)} s`}
         </Text>
         <Text style={styles.target}>
           Minima {target}
@@ -110,66 +124,98 @@ export function TrackFieldGameScreen({
 
       <View style={styles.stage}>
         <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%">
-          <Rect x={0} y={0} width={W} height={H} fill="#06101c" />
+          {/* Ciel, gradins, muret, piste */}
+          <Rect x={0} y={SKY} width={W} height={CROWD_TOP} fill="#0b1b35" />
+          {FLOODLIGHTS.map((f, i) => (
+            <React.Fragment key={`fl${i}`}>
+              <Rect x={f.x} y={f.y + 8} width={3} height={CROWD_TOP - f.y - 8} fill={COLORS.mast} />
+              <Rect x={f.x - 11} y={f.y} width={25} height={8} fill={COLORS.lamp} />
+            </React.Fragment>
+          ))}
+          <Rect x={0} y={CROWD_TOP} width={W} height={WALL_TOP - CROWD_TOP} fill="#16243d" />
+          {CROWD.map((c, i) => (
+            <Rect key={`c${i}`} x={c.x} y={c.y} width={5} height={5} fill={c.color} />
+          ))}
+          <Rect x={0} y={WALL_TOP} width={W} height={TRACK_TOP - WALL_TOP} fill="#7a8ba8" />
+          <Rect x={0} y={TRACK_TOP} width={W} height={H - TRACK_TOP} fill="#b4542f" />
+          {LANES.map((y, i) => (
+            <Rect key={`l${i}`} x={0} y={y} width={W} height={1.5} fill="rgba(255,255,255,0.45)" />
+          ))}
 
-          {/* Piste et repères tous les 10 m */}
-          <Rect x={0} y={GROUND} width={W} height={H - GROUND} fill="#123049" />
-          <Line x1={0} y1={GROUND} x2={W} y2={GROUND} stroke="#46e68c" strokeWidth={2} />
+          {/* Repères de distance : trait court tous les 10 m, long tous les 50 */}
           {MARKERS.map((m) => {
             const x = toScreen(m);
             if (x < -20 || x > W + 20) return null;
+            const long = m % 50 === 0;
             return (
-              <Line key={`m${m}`} x1={x} y1={GROUND} x2={x} y2={GROUND + 8} stroke="#2c5f80" strokeWidth={2} />
+              <Rect
+                key={`m${m}`}
+                x={x}
+                y={GROUND + 2}
+                width={long ? 3 : 2}
+                height={long ? 16 : 7}
+                fill={long ? '#ffe083' : 'rgba(255,255,255,0.55)'}
+              />
             );
           })}
 
-          {/* Haies */}
-          {event === 'hurdles' &&
-            state.hurdles.map((h, i) => {
-              const x = toScreen(h.x);
-              if (x < -20 || x > W + 20) return null;
-              return (
-                <Rect
-                  key={`h${i}`}
-                  x={x}
-                  y={GROUND - 20}
-                  width={3}
-                  height={20}
-                  fill={h.cleared ? '#2c5f80' : '#ffe083'}
-                />
-              );
-            })}
-
-          {/* Planche d'appel et zone de réception */}
+          {/* Sautoir : planche d'appel puis bac à sable */}
           {isFieldEvent(event) && (
             <>
               <Rect
                 x={toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH)}
-                y={GROUND - 4}
-                width={4}
-                height={4}
-                fill="#ff4778"
+                y={GROUND - 1}
+                width={Math.max(0, W - toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH))}
+                height={H - GROUND + 1}
+                fill="#d9c08a"
               />
               <Rect
-                x={toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH)}
-                y={GROUND}
-                width={Math.max(0, W - toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH))}
-                height={H - GROUND}
-                fill="#1b3d24"
+                x={toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH) - 3}
+                y={GROUND - 3}
+                width={4}
+                height={6}
+                fill="#ff4778"
               />
             </>
           )}
 
-          {/* Ligne d'arrivée */}
-          {!isFieldEvent(event) && (
-            <Rect
-              x={toScreen(event === 'hurdles' ? TRACK_DIMENSIONS.HURDLES_LENGTH : TRACK_DIMENSIONS.DASH_LENGTH)}
-              y={GROUND - 40}
-              width={3}
-              height={40}
-              fill="#eaffff"
-            />
-          )}
+          {/* Haies : deux pieds et une barre */}
+          {event === 'hurdles' &&
+            state.hurdles.map((h, i) => {
+              const x = toScreen(h.x);
+              if (x < -20 || x > W + 20) return null;
+              const colour = h.cleared ? '#8a6a55' : '#eaffff';
+              return (
+                <React.Fragment key={`h${i}`}>
+                  <Rect x={x} y={GROUND - 22} width={10} height={3} fill={colour} />
+                  <Rect x={x} y={GROUND - 22} width={2} height={22} fill={colour} />
+                  <Rect x={x + 8} y={GROUND - 22} width={2} height={22} fill={colour} />
+                </React.Fragment>
+              );
+            })}
+
+          {/* Ligne d'arrivée en damier */}
+          {!isFieldEvent(event) &&
+            (() => {
+              const x = toScreen(
+                event === 'hurdles' ? TRACK_DIMENSIONS.HURDLES_LENGTH : TRACK_DIMENSIONS.DASH_LENGTH,
+              );
+              if (x < -20 || x > W + 20) return null;
+              return (
+                <>
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <Rect
+                      key={`f${i}`}
+                      x={x}
+                      y={GROUND - 42 + i * 7}
+                      width={6}
+                      height={7}
+                      fill={i % 2 === 0 ? '#eaffff' : '#2b3f63'}
+                    />
+                  ))}
+                </>
+              );
+            })()}
 
           {/* Javelot en vol */}
           {state.phase === 'flying' && event === 'javelin' && (
@@ -177,9 +223,9 @@ export function TrackFieldGameScreen({
               d={spritePath(
                 JAVELIN,
                 toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH + state.flightDistance),
-                GROUND - 20 - state.flightHeight * 2.2,
-                3,
-                3,
+                GROUND - 16 - state.flightHeight * PX_PER_M * 0.35,
+                3.5,
+                3.5,
               )}
               fill="#ff9d5c"
             />
@@ -192,18 +238,25 @@ export function TrackFieldGameScreen({
           />
 
           {/* Jauge de vitesse */}
-          <Rect x={12} y={12} width={120} height={8} rx={4} fill="rgba(255,255,255,0.12)" />
-          <Rect x={12} y={12} width={120 * speedRatio} height={8} rx={4} fill="#72fbff" />
+          <Rect x={10} y={10} width={126} height={12} rx={6} fill="rgba(0,0,0,0.45)" />
+          <Rect
+            x={13}
+            y={13}
+            width={120 * speedRatio}
+            height={6}
+            rx={3}
+            fill={speedRatio > 0.85 ? '#46e68c' : speedRatio > 0.5 ? '#ffe083' : '#ff7a9c'}
+          />
 
           {/* Angle en cours de réglage */}
           {state.settingAngle && (
             <>
               <Line
                 x1={athleteX}
-                y1={GROUND}
-                x2={athleteX + Math.cos((state.angle * Math.PI) / 180) * 60}
-                y2={GROUND - Math.sin((state.angle * Math.PI) / 180) * 60}
-                stroke="#ffe083"
+                y1={GROUND - ATHLETE_H / 2}
+                x2={athleteX + Math.cos((state.angle * Math.PI) / 180) * 70}
+                y2={GROUND - ATHLETE_H / 2 - Math.sin((state.angle * Math.PI) / 180) * 70}
+                stroke={Math.abs(state.angle - 42) < 4 ? '#46e68c' : '#ffe083'}
                 strokeWidth={3}
               />
             </>

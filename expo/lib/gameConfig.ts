@@ -98,10 +98,21 @@ export const CONFIG = {
   trackField: {
     /** Vitesse maximale atteignable en martelant, en metres par seconde. */
     topSpeed: 11.5,
-    /** Gain de vitesse par alternance correcte des deux boutons. */
-    impulse: 0.62,
-    /** Perte de vitesse par seconde quand on arrete de marteler. */
-    decay: 5.2,
+    /**
+     * La vitesse ne vient PAS d'impulsions ajoutées coup par coup : chaque
+     * appui produisait un pic aussitôt écrêté par le plafond, si bien que
+     * marteler plus vite pouvait donner moins de vitesse. On mesure à la
+     * place la CADENCE de martèlement, lissée, et la vitesse converge vers
+     * elle.
+     *
+     * `tapWindow` est la constante de temps de la mesure : à cadence stable,
+     * l'accumulateur vaut `appuis_par_seconde x tapWindow`.
+     */
+    tapWindow: 0.5,
+    /** Mètres par seconde gagnés pour chaque appui par seconde. */
+    speedPerTap: 1.15,
+    /** Vitesse de convergence vers la vitesse visée (par seconde). */
+    responsiveness: 4,
     /**
      * Vitesse de balayage de l'angle tant qu'on maintient le bouton (deg/s).
      * À 95 deg/s, atteindre 42 demande 0,44 s, soit environ 5 m parcourus à
@@ -122,12 +133,19 @@ export const CONFIG = {
       longJump: { optimalAngle: 42, launchFactor: 0.73 },
       javelin: { optimalAngle: 43, launchFactor: 2.42 },
     },
-    /** Minima a franchir pour passer a l'epreuve suivante. */
+    /**
+     * Minima à franchir pour passer à l'épreuve suivante.
+     *
+     * Ces valeurs sont MESURÉES, pas devinées : un joueur martelant à 8 appuis
+     * par seconde (cadence tout à fait tenable) obtient 11,9 s, 4,80 m, 50,9 m
+     * et 13,1 s. Les minima laissent une petite marge sous ces résultats, et
+     * un joueur rapide (11 appuis/s) les dépasse largement.
+     */
     qualify: {
-      dash100: 11.6,
-      longJump: 6.5,
-      javelin: 62,
-      hurdles: 15.2,
+      dash100: 12.5,
+      longJump: 4.3,
+      javelin: 46,
+      hurdles: 14.5,
     },
     /** Trois essais aux concours, une seule manche aux courses. */
     fieldAttempts: 3,

@@ -188,14 +188,15 @@ export function useTrackFieldGame(): {
   const [state, setState] = useState<TrackFieldState>(initial);
   /** Dernier bouton de course frappé : seule l'alternance compte. */
   const lastRun = useRef<'a' | 'b' | null>(null);
-  const pendingImpulse = useRef(0);
+  /** Accumulateur de cadence : monte d'un cran par alternance, retombe seul. */
+  const cadence = useRef(0);
   const actionHeld = useRef(false);
   const actionPressed = useRef(false);
 
   const tapRun = (which: 'a' | 'b'): void => {
     if (lastRun.current !== which) {
       lastRun.current = which;
-      pendingImpulse.current += CONFIG.trackField.impulse;
+      cadence.current += 1;
     }
   };
 
@@ -209,15 +210,21 @@ export function useTrackFieldGame(): {
         const event = currentEvent(s.eventIndex);
         const n: TrackFieldState = { ...s };
 
-        // --- Course : impulsions accumulées moins le freinage naturel ---
-        if (n.phase === 'ready' && pendingImpulse.current > 0) n.phase = 'running';
+        // --- Course : la cadence mesurée fixe la vitesse visée ---
+        if (n.phase === 'ready' && cadence.current > 0) n.phase = 'running';
+        // L'accumulateur redescend tout seul : arrêter de marteler fait
+        // retomber la cadence mesurée, donc la vitesse.
+        cadence.current = Math.max(0, cadence.current - (cadence.current * dt) / cfg.tapWindow);
         if (n.phase === 'running') {
-          n.speed = clamp(n.speed + pendingImpulse.current - cfg.decay * dt, 0, cfg.topSpeed);
-          pendingImpulse.current = 0;
+          const tapsPerSecond = cadence.current / cfg.tapWindow;
+          const wanted = Math.min(cfg.topSpeed, tapsPerSecond * cfg.speedPerTap);
+          n.speed = clamp(
+            n.speed + (wanted - n.speed) * Math.min(1, cfg.responsiveness * dt),
+            0,
+            cfg.topSpeed,
+          );
           n.runDistance += n.speed * dt;
           n.time += dt;
-        } else {
-          pendingImpulse.current = 0;
         }
 
         // --- Réglage de l'angle : il monte tant que le bouton est tenu ---
@@ -355,7 +362,7 @@ export function useTrackFieldGame(): {
         })),
       restart: () => {
         lastRun.current = null;
-        pendingImpulse.current = 0;
+        cadence.current = 0;
         actionHeld.current = false;
         actionPressed.current = false;
         setState(initial());
