@@ -72,7 +72,18 @@ export const CONFIG = {
      */
     waveStartDrop: 17.5,
     waveStartDropMax: 4,
-    ufoPoints: [50, 50, 100, 150, 100, 100, 50, 300, 100, 100, 100, 50, 150, 100, 100],
+    /**
+     * Score de la soucoupe, indexé sur le nombre de tirs du joueur depuis le
+     * début de la vague. La borne stocke 16 valeurs mais reboucle après la
+     * 15e, la dernière n'étant jamais lue : le cycle est donc de 15. Le 300
+     * est à l'indice 8, ce qui le place sur le 23e tir (8 + 15) puis tous les
+     * 15 — la fameuse astuce du tir compté.
+     */
+    ufoPoints: [100, 50, 50, 100, 150, 100, 100, 50, 300, 100, 100, 100, 50, 150, 100],
+    /** La borne fait passer une soucoupe toutes les 25,6 s. */
+    ufoEvery: 25.6,
+    /** Plus aucune soucoupe quand il reste 7 envahisseurs ou moins. */
+    ufoMinInvaders: 8,
     /** Vie bonus unique, au premier passage de ce score. */
     bonusLifeAt: 1500,
     /** Invincibilité après avoir perdu une vie (secondes). */

@@ -269,9 +269,14 @@ export function useSpaceInvadersGame(): {
           }
         }
 
-        // --- Soucoupe mystère ---
+        // --- Soucoupe mystère : minuteur fixe, et plus rien quand la vague
+        // est presque vide (la borne l'arrête sous 8 envahisseurs) ---
         timers.current.ufo += dt;
-        if (!ufo.active && timers.current.ufo > 9) {
+        if (
+          !ufo.active &&
+          timers.current.ufo > CONFIG.invaders.ufoEvery &&
+          aliveCount >= CONFIG.invaders.ufoMinInvaders
+        ) {
           timers.current.ufo = 0;
           const d: 1 | -1 = Math.random() > 0.5 ? 1 : -1;
           ufo = { active: true, dir: d, x: d === 1 ? -UFO_W : W + UFO_W, y: 40 };
