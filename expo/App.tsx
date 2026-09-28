@@ -26,7 +26,10 @@ function renderRoute(route: Route, go: (next: Route) => void): React.ReactElemen
         <HubScreen
           onAsteroids={() => go('asteroidsMenu')}
           onInvaders={() => go('invadersMenu')}
-          onOlympic={() => Alert.alert('Olympic Summer Games', 'Ce jeu sera développé plus tard.')}
+          onOlympic={() =>
+            Alert.alert('Olympic Games', 'Cette borne n’est pas encore développée.')
+          }
+          onPacman={() => Alert.alert('Pac-Man', 'Cette borne n’est pas encore développée.')}
         />
       );
     case 'asteroidsMenu':

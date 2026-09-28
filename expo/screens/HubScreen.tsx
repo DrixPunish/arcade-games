@@ -1,121 +1,142 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
-import { Gamepad2, Medal, Rocket } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { GameTile } from '../components/GameTile';
+import { TILE_ART } from '../lib/tileArt';
+import { getLocalHighScores } from '../lib/highScores';
+
+const GAP = 14;
+const MAX_TILE = 190;
 
 export function HubScreen({
   onAsteroids,
   onInvaders,
   onOlympic,
+  onPacman,
 }: {
   onAsteroids: () => void;
   onInvaders: () => void;
   onOlympic: () => void;
+  onPacman: () => void;
 }): React.ReactElement {
-  // useWindowDimensions se met à jour à la rotation / au redimensionnement,
-  // contrairement à un Dimensions.get() lu une seule fois au premier rendu.
+  // useWindowDimensions se met à jour à la rotation, contrairement à un
+  // Dimensions.get() lu une seule fois au premier rendu.
   const { width } = useWindowDimensions();
-  const compact = width < 620;
+  const available = Math.min(width, 620) - 44;
+  const tileWidth = Math.min(MAX_TILE, (available - GAP) / 2);
+
+  const [best, setBest] = useState<{ asteroids: number; spaceInvaders: number }>({
+    asteroids: 0,
+    spaceInvaders: 0,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([getLocalHighScores('asteroids'), getLocalHighScores('spaceInvaders')]).then(
+      ([a, s]) => {
+        if (!cancelled) setBest({ asteroids: a[0]?.score ?? 0, spaceInvaders: s[0]?.score ?? 0 });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // « INSERT COIN » qui clignote : une borne ne reste jamais tout à fait immobile.
+  const [coinOn, setCoinOn] = useState(true);
+  useEffect(() => {
+    const timer = setInterval(() => setCoinOn((on) => !on), 650);
+    return () => clearInterval(timer);
+  }, []);
+
+  const scoreLabel = (score: number): string =>
+    score > 0 ? `★ ${score.toLocaleString('fr-FR')}` : 'Jamais joué';
 
   return (
     <View style={styles.container}>
-      <Text style={styles.kicker}>INSERT COIN</Text>
-      <Text style={styles.title}>Arcade Games</Text>
-      <Text style={styles.subtitle}>
-        Trois bornes. Deux classiques jouables, sprites d’époque et classement en ligne.
-      </Text>
-      <View style={[styles.grid, compact && styles.gridCompact]}>
-        <GameOrb
+      <Text style={[styles.coin, !coinOn && styles.coinOff]}>◆ INSERT COIN ◆</Text>
+
+      <View style={styles.marquee}>
+        <Text style={styles.title}>ARCADE</Text>
+        <View style={styles.rule} />
+        <Text style={styles.subtitle}>Quatre bornes, une salle</Text>
+      </View>
+
+      <View style={[styles.grid, { width: tileWidth * 2 + GAP }]}>
+        <GameTile
+          art={TILE_ART.asteroids}
           title="Asteroids"
-          accent="#79fbff"
+          status={scoreLabel(best.asteroids)}
+          width={tileWidth}
           onPress={onAsteroids}
-          icon={<Rocket color="#00141a" size={44} />}
         />
-        <GameOrb
+        <GameTile
+          art={TILE_ART.invaders}
           title="Space Invaders"
-          accent="#ffe083"
+          status={scoreLabel(best.spaceInvaders)}
+          width={tileWidth}
           onPress={onInvaders}
-          icon={<Gamepad2 color="#1a1000" size={44} />}
         />
-        <GameOrb
-          title="Olympic Summer Games"
-          accent="#ff7a9c"
+        <GameTile
+          art={TILE_ART.olympic}
+          title="Olympic Games"
+          status="Bientôt"
+          width={tileWidth}
           onPress={onOlympic}
           comingSoon
-          icon={<Medal color="#2b0712" size={44} />}
+        />
+        <GameTile
+          art={TILE_ART.pacman}
+          title="Pac-Man"
+          status="Bientôt"
+          width={tileWidth}
+          onPress={onPacman}
+          comingSoon
         />
       </View>
     </View>
   );
 }
 
-function GameOrb({
-  title,
-  accent,
-  icon,
-  onPress,
-  comingSoon,
-}: {
-  title: string;
-  accent: string;
-  icon: React.ReactNode;
-  onPress: () => void;
-  comingSoon?: boolean;
-}): React.ReactElement {
-  return (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={comingSoon ? `${title} (bientôt disponible)` : title}
-      style={[styles.orbWrap, comingSoon && styles.dimmed]}
-    >
-      <View style={[styles.orb, { backgroundColor: accent, shadowColor: accent }]}>{icon}</View>
-      <Text style={styles.orbTitle}>{title}</Text>
-      {comingSoon ? (
-        <Text style={styles.soon}>Coming soon</Text>
-      ) : (
-        <Text style={styles.play}>Tap to play</Text>
-      )}
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 22 },
-  kicker: { color: '#ffe083', fontWeight: '900', letterSpacing: 5, marginBottom: 8 },
+  coin: {
+    color: '#ffe083',
+    fontWeight: '900',
+    letterSpacing: 4,
+    fontSize: 12,
+    marginBottom: 14,
+  },
+  coinOff: { opacity: 0.15 },
+  marquee: { alignItems: 'center', marginBottom: 26 },
   title: {
     color: '#f7ffff',
-    fontSize: 48,
+    fontSize: 52,
     fontWeight: '900',
+    letterSpacing: 10,
     textAlign: 'center',
     textShadowColor: '#08ffff',
-    textShadowRadius: 18,
+    textShadowRadius: 22,
+    textShadowOffset: { width: 0, height: 0 },
   },
-  subtitle: { color: '#9fb8c8', fontSize: 16, textAlign: 'center', marginTop: 12, maxWidth: 560 },
+  rule: {
+    height: 2,
+    width: 150,
+    marginTop: 10,
+    backgroundColor: 'rgba(114,251,255,0.55)',
+    borderRadius: 1,
+  },
+  subtitle: {
+    color: '#9fb8c8',
+    fontSize: 13,
+    letterSpacing: 2,
+    marginTop: 10,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
   grid: {
     flexDirection: 'row',
-    gap: 22,
-    marginTop: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
     flexWrap: 'wrap',
-  },
-  gridCompact: { flexDirection: 'column', marginTop: 30 },
-  orbWrap: { alignItems: 'center', width: 178 },
-  dimmed: { opacity: 0.55 },
-  orb: {
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    alignItems: 'center',
+    gap: GAP,
     justifyContent: 'center',
-    borderWidth: 5,
-    borderColor: 'rgba(255,255,255,0.75)',
-    shadowOpacity: 0.75,
-    shadowRadius: 25,
-    elevation: 8,
   },
-  orbTitle: { color: '#ffffff', fontWeight: '900', fontSize: 18, textAlign: 'center', marginTop: 14 },
-  soon: { color: '#ffb4c5', fontWeight: '800', marginTop: 5 },
-  play: { color: '#72fbff', fontWeight: '800', marginTop: 5 },
 });
