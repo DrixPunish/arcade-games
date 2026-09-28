@@ -52,6 +52,26 @@ export const CONFIG = {
      * du joueur depuis le début de la vague : c'est ce qui rend la soucoupe à
      * 300 points atteignable au 23e tir puis tous les 15.
      */
+    /**
+     * Cadence et pas de la formation, repris de la borne Taito et convertis à
+     * notre terrain (360x560 contre 224x256 à l'origine).
+     *
+     * La borne redessine UN envahisseur par frame : la formation avance donc
+     * d'un pas tous les `vivants / 60` secondes, ce qui la fait accélérer
+     * toute seule à mesure qu'ils meurent. C'est cette règle-là qui donne son
+     * rythme au jeu, pas une courbe de difficulté arbitraire.
+     */
+    stepX: 3.2,
+    /** La borne accorde 3 px vers la droite (et non 2) au dernier survivant. */
+    lastInvaderStepRight: 4.8,
+    stepDown: 17.5,
+    stepIntervalMin: 1 / 60,
+    /**
+     * Chaque vague démarre plus bas, comme sur la borne — c'est ainsi que la
+     * difficulté monte, et non en accélérant la formation.
+     */
+    waveStartDrop: 17.5,
+    waveStartDropMax: 4,
     ufoPoints: [50, 50, 100, 150, 100, 100, 50, 300, 100, 100, 100, 50, 150, 100, 100],
     /** Vie bonus unique, au premier passage de ce score. */
     bonusLifeAt: 1500,

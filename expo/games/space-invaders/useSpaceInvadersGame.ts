@@ -99,7 +99,10 @@ const makeInvaders = (wave: number): Invader[] =>
       row,
       col,
       x: 40 + col * CELL + inset,
-      y: 72 + row * ROW_GAP,
+      y:
+        72 +
+        Math.min(wave - 1, CONFIG.invaders.waveStartDropMax) * CONFIG.invaders.waveStartDrop +
+        row * ROW_GAP,
       alive: true,
       points: pointsForKind(kind),
     };
@@ -219,10 +222,9 @@ export function useSpaceInvadersGame(): {
         // --- Avancée de la formation (plus rapide à mesure qu'elle se vide) ---
         timers.current.step += dt;
         const aliveCount = invaders.reduce((n, i) => (i.alive ? n + 1 : n), 0);
-        const interval = Math.max(
-          0.08,
-          0.62 - (1 - aliveCount / INVADER_TOTAL) * 0.5 - s.wave * 0.025,
-        );
+        // Un envahisseur redessiné par frame sur la borne : la formation
+        // avance donc tous les `vivants / 60` secondes.
+        const interval = Math.max(CONFIG.invaders.stepIntervalMin, aliveCount / 60);
         if (timers.current.step > interval) {
           timers.current.step = 0;
           // L'animation bascule à chaque pas : c'est le pas qui fait « marcher »
@@ -236,9 +238,13 @@ export function useSpaceInvadersGame(): {
           );
           if (edge) {
             dir.current = dir.current === 1 ? -1 : 1;
-            invaders = invaders.map((i) => ({ ...i, y: i.y + 14 }));
+            invaders = invaders.map((i) => ({ ...i, y: i.y + CONFIG.invaders.stepDown }));
           } else {
-            const step = dir.current * 10;
+            const width =
+              aliveCount === 1 && dir.current === 1
+                ? CONFIG.invaders.lastInvaderStepRight
+                : CONFIG.invaders.stepX;
+            const step = dir.current * width;
             invaders = invaders.map((i) => ({ ...i, x: i.x + step }));
           }
         }

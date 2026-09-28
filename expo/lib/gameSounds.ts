@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 
+/** Sons d'Asteroids, puis ceux de Space Invaders (préfixe `si`). */
 export type AsteroidsSoundKey =
   | 'fire'
   | 'thrust'
@@ -8,7 +9,16 @@ export type AsteroidsSoundKey =
   | 'bangSmall'
   | 'saucerBig'
   | 'saucerSmall'
-  | 'extraShip';
+  | 'extraShip'
+  | 'siStep1'
+  | 'siStep2'
+  | 'siStep3'
+  | 'siStep4'
+  | 'siShoot'
+  | 'siInvaderDie'
+  | 'siPlayerDie'
+  | 'siUfo'
+  | 'siUfoDie';
 
 const ALL_KEYS: AsteroidsSoundKey[] = [
   'fire',
@@ -19,6 +29,15 @@ const ALL_KEYS: AsteroidsSoundKey[] = [
   'saucerBig',
   'saucerSmall',
   'extraShip',
+  'siStep1',
+  'siStep2',
+  'siStep3',
+  'siStep4',
+  'siShoot',
+  'siInvaderDie',
+  'siPlayerDie',
+  'siUfo',
+  'siUfoDie',
 ];
 
 const POOL_SIZE: Record<AsteroidsSoundKey, number> = {
@@ -30,15 +49,27 @@ const POOL_SIZE: Record<AsteroidsSoundKey, number> = {
   saucerBig: 1,
   saucerSmall: 1,
   extraShip: 1,
+  // Les quatre notes s'enchaînent vite quand la formation accélère : deux
+  // lecteurs chacune pour qu'une note ne coupe pas la précédente.
+  siStep1: 2,
+  siStep2: 2,
+  siStep3: 2,
+  siStep4: 2,
+  siShoot: 3,
+  siInvaderDie: 3,
+  siPlayerDie: 1,
+  siUfo: 1,
+  siUfoDie: 1,
 };
 
 const LOOPING: Partial<Record<AsteroidsSoundKey, boolean>> = {
   thrust: true,
   saucerBig: true,
   saucerSmall: true,
+  siUfo: true,
 };
 
-const TAG = '[asteroidsSounds]';
+const TAG = '[gameSounds]';
 
 /** Log de développement : muet dans un build de production. */
 function debugLog(...args: unknown[]): void {
@@ -194,6 +225,24 @@ function synthOneShot(key: AsteroidsSoundKey): Float32Array {
         genOscSweep('sine', 880, 880, 0.18, 0.3),
         0.05,
       );
+    // Les quatre notes graves descendantes : le « battement de cœur » de la
+    // borne, joué une note par pas de formation. Il accélère donc tout seul.
+    case 'siStep1':
+      return genOscSweep('square', 116, 110, 0.14, 0.32);
+    case 'siStep2':
+      return genOscSweep('square', 104, 98, 0.14, 0.32);
+    case 'siStep3':
+      return genOscSweep('square', 92, 87, 0.14, 0.32);
+    case 'siStep4':
+      return genOscSweep('square', 82, 78, 0.14, 0.32);
+    case 'siShoot':
+      return genOscSweep('sawtooth', 340, 1250, 0.11, 0.22);
+    case 'siInvaderDie':
+      return mix(genNoise(0.26, 0.4, 2200), genOscSweep('square', 420, 150, 0.26, 0.24));
+    case 'siPlayerDie':
+      return mix(genNoise(0.7, 0.45, 1100), genOscSweep('sawtooth', 320, 60, 0.7, 0.3));
+    case 'siUfoDie':
+      return mix(genNoise(0.4, 0.35, 1800), genOscSweep('square', 900, 180, 0.4, 0.26));
     default:
       return new Float32Array(0);
   }
@@ -207,6 +256,9 @@ function synthLoop(key: AsteroidsSoundKey): Float32Array {
       return genSaucerLoop(220, 4, 0.5, 0.18);
     case 'saucerSmall':
       return genSaucerLoop(520, 8, 0.5, 0.18);
+    case 'siUfo':
+      // Sirène rapide, plus aiguë que les soucoupes d'Asteroids.
+      return genSaucerLoop(700, 14, 0.5, 0.15);
     default:
       return new Float32Array(0);
   }
@@ -374,6 +426,33 @@ class WebSoundBackend implements SoundBackend {
           try { this.envOsc('sine', 880, 880, 0.18, 0.3); } catch {}
         }, 180);
         break;
+      case 'siStep1':
+        this.envOsc('square', 116, 110, 0.14, 0.32);
+        break;
+      case 'siStep2':
+        this.envOsc('square', 104, 98, 0.14, 0.32);
+        break;
+      case 'siStep3':
+        this.envOsc('square', 92, 87, 0.14, 0.32);
+        break;
+      case 'siStep4':
+        this.envOsc('square', 82, 78, 0.14, 0.32);
+        break;
+      case 'siShoot':
+        this.envOsc('sawtooth', 340, 1250, 0.11, 0.22);
+        break;
+      case 'siInvaderDie':
+        this.envNoise(0.26, 0.4, 2200);
+        this.envOsc('square', 420, 150, 0.26, 0.24);
+        break;
+      case 'siPlayerDie':
+        this.envNoise(0.7, 0.45, 1100);
+        this.envOsc('sawtooth', 320, 60, 0.7, 0.3);
+        break;
+      case 'siUfoDie':
+        this.envNoise(0.4, 0.35, 1800);
+        this.envOsc('square', 900, 180, 0.4, 0.26);
+        break;
       default:
         break;
     }
@@ -419,12 +498,12 @@ class WebSoundBackend implements SoundBackend {
       };
     }
 
-    const baseFreq = key === 'saucerBig' ? 220 : 520;
+    const baseFreq = key === 'saucerBig' ? 220 : key === 'siUfo' ? 700 : 520;
     const osc = ctx.createOscillator();
     osc.type = 'square';
     osc.frequency.value = baseFreq;
     const lfo = ctx.createOscillator();
-    lfo.frequency.value = key === 'saucerBig' ? 4 : 8;
+    lfo.frequency.value = key === 'saucerBig' ? 4 : key === 'siUfo' ? 14 : 8;
     const lfoGain = ctx.createGain();
     lfoGain.gain.value = baseFreq * 0.15;
     lfo.connect(lfoGain);

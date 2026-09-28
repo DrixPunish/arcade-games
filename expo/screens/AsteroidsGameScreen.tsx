@@ -7,7 +7,7 @@ import { HighScorePrompt } from '../components/HighScorePrompt';
 import { AsteroidsSprite, type AsteroidsSpriteKey } from '../components/AsteroidsSprite';
 import { ASTEROIDS_DIMENSIONS, useAsteroidsGame } from '../games/asteroids/useAsteroidsGame';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
-import { getAsteroidsSounds } from '../lib/asteroidsSounds';
+import { getAsteroidsSounds } from '../lib/gameSounds';
 
 const LARGE_SPRITES: AsteroidsSpriteKey[] = ['asteroidLarge1', 'asteroidLarge2', 'asteroidLarge3'];
 const MEDIUM_SPRITES: AsteroidsSpriteKey[] = ['asteroidMedium1', 'asteroidMedium2', 'asteroidMedium3'];

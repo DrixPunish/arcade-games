@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 
@@ -20,6 +20,7 @@ import {
   spritePath,
 } from '../games/space-invaders/sprites';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
+import { getAsteroidsSounds } from '../lib/gameSounds';
 
 const D = INVADERS_DIMENSIONS;
 
@@ -110,6 +111,82 @@ export function SpaceInvadersGameScreen({
   const { state, controls } = useSpaceInvadersGame();
   const [askName, setAskName] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
+
+  const sounds = useMemo(() => {
+    try {
+      return getAsteroidsSounds();
+    } catch (e) {
+      console.warn('[SpaceInvadersGameScreen] audio indisponible', e);
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      sounds?.init();
+    } catch (e) {
+      console.warn('[SpaceInvadersGameScreen] init audio', e);
+    }
+    return () => {
+      try {
+        sounds?.stopAllLoops();
+      } catch {}
+    };
+  }, [sounds]);
+
+  // --- Sonorisation, déduite de l'état ---
+  const stepNote = useRef(0);
+  const prevFrame = useRef(state.animFrame);
+  const prevScore = useRef(state.score);
+  const prevLives = useRef(state.lives);
+  const prevBullet = useRef(state.playerBullet !== null);
+  const prevUfo = useRef(state.ufo.active);
+
+  useEffect(() => {
+    if (!sounds) return;
+    try {
+      // Une note par pas de formation : les quatre se suivent en boucle, donc
+      // le « battement » accélère exactement comme la formation.
+      if (state.animFrame !== prevFrame.current) {
+        prevFrame.current = state.animFrame;
+        if (state.status === 'running') {
+          const notes = ['siStep1', 'siStep2', 'siStep3', 'siStep4'] as const;
+          sounds.play(notes[stepNote.current % notes.length]);
+          stepNote.current += 1;
+        }
+      }
+
+      const firing = state.playerBullet !== null;
+      if (firing && !prevBullet.current) sounds.play('siShoot');
+      prevBullet.current = firing;
+
+      const ufoGone = prevUfo.current && !state.ufo.active;
+      const scored = state.score !== prevScore.current;
+      if (scored) {
+        // La soucoupe abattue et un envahisseur touché rapportent tous deux
+        // des points : c'est la disparition de la soucoupe qui les départage.
+        sounds.play(ufoGone ? 'siUfoDie' : 'siInvaderDie');
+      }
+      prevScore.current = state.score;
+      prevUfo.current = state.ufo.active;
+
+      if (state.lives < prevLives.current) sounds.play('siPlayerDie');
+      prevLives.current = state.lives;
+
+      sounds.setLoop('siUfo', state.ufo.active && state.status === 'running');
+    } catch (e) {
+      console.warn('[SpaceInvadersGameScreen] son', e);
+    }
+  }, [sounds, state.animFrame, state.score, state.lives, state.playerBullet, state.ufo.active, state.status]);
+
+  // Plus aucune boucle ne doit tourner une fois la partie finie.
+  useEffect(() => {
+    if (state.status !== 'running') {
+      try {
+        sounds?.stopAllLoops();
+      } catch {}
+    }
+  }, [sounds, state.status]);
 
   useEffect(() => {
     if (state.status !== 'gameOver') return;
