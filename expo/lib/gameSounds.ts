@@ -36,7 +36,7 @@ export type ArcadeSoundKey =
   | 'pacFright'
   | 'pacEyes';
 
-const ALL_KEYS: ArcadeSoundKey[] = [
+export const ALL_KEYS: ArcadeSoundKey[] = [
   'fire',
   'thrust',
   'bangLarge',
@@ -107,7 +107,7 @@ const POOL_SIZE: Record<ArcadeSoundKey, number> = {
   pacEyes: 1,
 };
 
-const LOOPING: Partial<Record<ArcadeSoundKey, boolean>> = {
+export const LOOPING: Partial<Record<ArcadeSoundKey, boolean>> = {
   thrust: true,
   saucerBig: true,
   saucerSmall: true,
@@ -280,7 +280,12 @@ function concat(a: Float32Array, b: Float32Array, gapSec: number): Float32Array 
   return out;
 }
 
-function synthOneShot(key: ArcadeSoundKey): Float32Array {
+/**
+ * Exportées pour la suite de tests : ce sont des fonctions pures, et c'est le
+ * seul moyen de vérifier qu'une clé ajoutée à l'énumération produit bien un
+ * son. Une clé sans synthèse est parfaitement silencieuse, sans erreur.
+ */
+export function synthOneShot(key: ArcadeSoundKey): Float32Array {
   switch (key) {
     case 'fire':
       return genOscSweep('square', 880, 220, 0.12, 0.25);
@@ -345,7 +350,7 @@ function synthOneShot(key: ArcadeSoundKey): Float32Array {
   }
 }
 
-function synthLoop(key: ArcadeSoundKey): Float32Array {
+export function synthLoop(key: ArcadeSoundKey): Float32Array {
   switch (key) {
     case 'thrust':
       return genNoiseLoop(0.5, 0.18, 380);

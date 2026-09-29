@@ -254,20 +254,46 @@ export function PacmanGameScreen({
   const powerVisible = beat % 3 !== 0;
 
   /* --- sons --- */
-  const sounds = useMemo(() => getArcadeSounds(), []);
+  const sounds = useMemo(() => {
+    try {
+      return getArcadeSounds();
+    } catch (e) {
+      console.warn('[PacmanGameScreen] audio indisponible', e);
+      return null;
+    }
+  }, []);
+
+  /**
+   * Le gestionnaire de sons doit être INITIALISÉ avant de jouer quoi que ce
+   * soit : c'est lui qui synthétise les échantillons et ouvre le contexte
+   * audio. Sans cet appel, chaque `play()` repartait aussitôt et Pac-Man
+   * était entièrement muet — sans la moindre erreur.
+   */
+  useEffect(() => {
+    try {
+      void sounds?.init();
+    } catch (e) {
+      console.warn('[PacmanGameScreen] init audio', e);
+    }
+    return () => {
+      try {
+        sounds?.stopAllLoops();
+      } catch {}
+    };
+  }, [sounds]);
   const wakaRef = useRef(0);
   useEffect(() => {
     const e = takeEvents();
     if (e.dot) {
       // Les deux notes du « waka waka » alternent à chaque gomme.
       wakaRef.current ^= 1;
-      sounds.play(wakaRef.current ? 'pacWakaB' : 'pacWakaA');
+      sounds?.play(wakaRef.current ? 'pacWakaB' : 'pacWakaA');
     }
-    if (e.power) sounds.play('pacPower');
-    if (e.eatGhost) sounds.play('pacEatGhost');
-    if (e.fruit) sounds.play('pacFruit');
-    if (e.death) sounds.play('pacDeath');
-    if (e.extraLife) sounds.play('pacExtraLife');
+    if (e.power) sounds?.play('pacPower');
+    if (e.eatGhost) sounds?.play('pacEatGhost');
+    if (e.fruit) sounds?.play('pacFruit');
+    if (e.death) sounds?.play('pacDeath');
+    if (e.extraLife) sounds?.play('pacExtraLife');
   });
 
   /**
@@ -285,14 +311,11 @@ export function PacmanGameScreen({
   useEffect(() => {
     const siren = (['pacSiren1', 'pacSiren2', 'pacSiren3', 'pacSiren4'] as const)[sirenStep];
     for (const key of ['pacSiren1', 'pacSiren2', 'pacSiren3', 'pacSiren4'] as const) {
-      sounds.setLoop(key, playing && !anyEyes && state.fright <= 0 && key === siren);
+      sounds?.setLoop(key, playing && !anyEyes && state.fright <= 0 && key === siren);
     }
-    sounds.setLoop('pacEyes', playing && anyEyes);
-    sounds.setLoop('pacFright', playing && !anyEyes && state.fright > 0);
+    sounds?.setLoop('pacEyes', playing && anyEyes);
+    sounds?.setLoop('pacFright', playing && !anyEyes && state.fright > 0);
   }, [sounds, playing, anyEyes, state.fright, sirenStep]);
-
-  // Quitter l'écran ou mettre en pause ne doit pas laisser une boucle tourner.
-  useEffect(() => () => sounds.stopAllLoops(), [sounds]);
 
   /* --- score --- */
   useEffect(() => {

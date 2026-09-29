@@ -92,3 +92,50 @@ test('les deux backends couvrent les memes cles', async () => {
     expect(`${key}:${occurrences}`).toBe(`${key}:2`);
   }
 });
+
+test('tout ecran qui joue un son initialise le gestionnaire', async () => {
+  // Pac-Man est reste totalement muet parce que son ecran n'appelait jamais
+  // `init()`. Aucune erreur, aucun avertissement : `play()` repartait
+  // simplement aussitot. C'est exactement le genre de panne qu'on ne voit
+  // qu'en jouant, donc elle merite un controle.
+  const dir = new URL('../screens/', import.meta.url);
+  const names = [...(await Array.fromAsync(new Bun.Glob('*.tsx').scan({ cwd: Bun.fileURLToPath(dir) })))];
+  let checked = 0;
+  for (const name of names) {
+    const src = await Bun.file(Bun.fileURLToPath(new URL(name, dir))).text();
+    if (!src.includes('getArcadeSounds')) continue;
+    checked += 1;
+    const hasInit = /sounds\??\.init\(\)/.test(src);
+    const hasStop = /sounds\??\.stopAllLoops\(\)/.test(src);
+    console.log(`  -> ${name.padEnd(28)} init=${hasInit ? 'oui' : 'NON'} arret des boucles=${hasStop ? 'oui' : 'NON'}`);
+    // Le libelle attendu est 'oui' : en cas d'echec le message nomme l'ecran
+    // fautif, au lieu d'un « false !== true » muet.
+    expect(`${name}:init=oui`).toBe(`${name}:init=${hasInit ? 'oui' : 'NON'}`);
+    // Sortir de l'ecran doit couper les boucles, sinon la sirene continue.
+    expect(`${name}:stop=oui`).toBe(`${name}:stop=${hasStop ? 'oui' : 'NON'}`);
+  }
+  expect(checked).toBeGreaterThanOrEqual(3);
+});
+
+test('chaque cle produit vraiment un echantillon audible', () => {
+  // Controle le plus fort de ce fichier : on SYNTHETISE reellement les 31
+  // sons et on mesure leur amplitude. Une cle ajoutee a l'enumeration mais
+  // oubliee dans la synthese serait sinon parfaitement silencieuse, sans la
+  // moindre erreur — exactement le genre de panne qu'on ne voit qu'en jouant.
+  const muets: string[] = [];
+  for (const key of S.ALL_KEYS) {
+    const samples = S.LOOPING[key] ? S.synthLoop(key) : S.synthOneShot(key);
+    let peak = 0;
+    for (const v of samples) peak = Math.max(peak, Math.abs(v));
+    if (samples.length === 0 || peak < 0.01) muets.push(`${key}(${samples.length} ech., crete ${peak.toFixed(3)})`);
+  }
+  console.log(`  -> ${S.ALL_KEYS.length} cles synthetisees, ${muets.length} muette(s)`);
+  expect(muets).toEqual([]);
+});
+
+test('les sept sons de Pac-Man et ses six boucles sont tous la', () => {
+  const attendus = [...PACMAN, 'pacSiren1', 'pacSiren2', 'pacSiren3', 'pacSiren4', 'pacFright', 'pacEyes'];
+  const manquants = attendus.filter((k) => !S.ALL_KEYS.includes(k as any));
+  console.log(`  -> ${attendus.length} cles attendues pour Pac-Man, ${manquants.length} manquante(s)`);
+  expect(manquants).toEqual([]);
+});
