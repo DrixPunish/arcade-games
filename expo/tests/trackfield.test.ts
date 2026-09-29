@@ -316,3 +316,44 @@ test('le 110 m haies se qualifie meme en renversant deux haies', () => {
   expect(g.state.phase).toBe('result');
   expect(g.state.result).toBeLessThan(minima);
 });
+
+test('un parcours parfait aux haies garde son elan et bat le minima', () => {
+  // 5 appuis/s ne qualifie sur AUCUNE epreuve (18,6 s au 100 m plat) : la
+  // barre est calee sur un martelement tenable, 8 appuis par seconde.
+  for (const taps of [8, 11]) {
+    const g = mount();
+    g.state.eventIndex = 3;
+    let airborneFrames = 0;
+    let totalFrames = 0;
+    let minSpeed = Infinity;
+    let peak = 0;
+    for (let i = 0; i < 60 * 60 && g.state.phase !== 'result'; i += 1) {
+      const next = g.state.hurdles.find((h: any) => !h.cleared);
+      if (next && !g.state.airborne) {
+        const gap = next.x - g.state.runDistance;
+        // Appel au milieu de la bande : le geste d'un joueur qui vise bien.
+        if (gap > 0 && gap <= CONFIG.trackField.hurdleTakeoffZone * 0.6) {
+          g.controls.action(true); g.hammer(1, taps); g.controls.action(false);
+          continue;
+        }
+      }
+      // Pendant le vol, le joueur a un pouce occupe : il NE martele PAS.
+      if (g.state.airborne) { g.step(1); airborneFrames += 1; }
+      else g.hammer(1, taps);
+      totalFrames += 1;
+      peak = Math.max(peak, g.state.speed);
+      if (g.state.runDistance > 20) minSpeed = Math.min(minSpeed, g.state.speed);
+    }
+    const minima = CONFIG.trackField.qualify.hurdles;
+    console.log(
+      `  -> ${String(taps).padStart(2)} appuis/s : ${g.state.result.toFixed(2)} s (minima ${minima})` +
+      ` | pointe ${peak.toFixed(1)} m/s, creux ${minSpeed.toFixed(1)} m/s` +
+      ` | ${((airborneFrames / totalFrames) * 100).toFixed(0)} % du temps en l air`,
+    );
+    expect(g.state.phase).toBe('result');
+    expect(g.state.message).not.toContain('Haie');
+    // L'elan ne doit plus s'effondrer a chaque haie.
+    expect(minSpeed).toBeGreaterThan(peak * 0.7);
+    expect(g.state.result).toBeLessThan(minima);
+  }
+});

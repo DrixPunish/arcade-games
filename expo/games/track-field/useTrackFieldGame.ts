@@ -197,7 +197,9 @@ export function useTrackFieldGame(): {
    * combien de temps. La portée n'est pas fixe — elle est calculée pour que
    * le sommet de l'arc tombe sur la haie visée.
    */
-  const jump = useRef({ from: 0, span: 0, time: 0 });
+  const jump = useRef({ from: 0, span: 0, time: 0, snapped: false });
+  /** Haie visée par un appui déjà donné, en attente du point d'appel. */
+  const armed = useRef<number | null>(null);
 
   const tapRun = (which: 'a' | 'b'): void => {
     if (lastRun.current !== which) {
@@ -218,20 +220,35 @@ export function useTrackFieldGame(): {
 
         // --- Course : la cadence mesurée fixe la vitesse visée ---
         if (n.phase === 'ready' && cadence.current > 0) n.phase = 'running';
-        // L'accumulateur redescend tout seul : arrêter de marteler fait
-        // retomber la cadence mesurée, donc la vitesse.
-        cadence.current = Math.max(0, cadence.current - (cadence.current * dt) / cfg.tapWindow);
-
         // Dès qu'on tient le bouton pour régler l'angle, la vitesse est FIGÉE
         // à celle du moment. C'est l'élan acquis qu'on emporte dans le saut :
         // le joueur peut lâcher le martèlement et ne viser que l'angle.
         // `n.settingAngle` est encore vrai sur l'image du RELÂCHEMENT : sans
         // cela la vitesse se remettait à jour juste avant que le saut soit
         // calculé, et le résultat dépendait encore du martèlement.
+        //
+        // Même principe en vol au-dessus d'une haie, et pour la même raison :
+        // sur un téléphone on n'a que deux pouces. Appuyer sur SAUT oblige à
+        // en lever un des boutons de course, l'alternance s'interrompt, et la
+        // cadence retombe avec une constante de temps de 0,5 s — sur un vol de
+        // près d'une seconde, on atterrissait presque à l'arrêt. Dix fois de
+        // suite, le minima devenait inatteignable même en franchissant tout.
+        //
+        // Seuls les sauts CALÉS sur une haie figent la vitesse : sinon il
+        // suffirait d'enchaîner des sauts dans le vide pour garder sa pointe
+        // de vitesse sans plus jamais marteler.
         const lockingSpeed =
-          isFieldEvent(event) &&
-          (actionHeld.current || n.settingAngle) &&
-          n.phase === 'running';
+          n.phase === 'running' &&
+          ((isFieldEvent(event) && (actionHeld.current || n.settingAngle)) ||
+            (event === 'hurdles' && n.airborne && jump.current.snapped));
+
+        // L'accumulateur redescend tout seul : arrêter de marteler fait
+        // retomber la cadence mesurée, donc la vitesse. Il se fige AVEC la
+        // vitesse, sans quoi on retombait au sol l'accumulateur vide et il
+        // fallait tout reconstruire après chacune des dix haies.
+        if (!lockingSpeed) {
+          cadence.current = Math.max(0, cadence.current - (cadence.current * dt) / cfg.tapWindow);
+        }
 
         if (n.phase === 'running') {
           if (!lockingSpeed) {
@@ -276,18 +293,33 @@ export function useTrackFieldGame(): {
               // la haie SUIVANTE et laissait passer celle qu'on voulait sauter.
               const next = n.hurdles.find((h) => !h.cleared);
               const gap = next ? next.x - n.runDistance : Infinity;
-              const snap = gap <= cfg.hurdleTakeoffZone;
-              const takeoff = snap
-                ? Math.max(cfg.hurdleMinTakeoff, gap)
-                : cfg.hurdleJumpSpan / 2;
-              // L'arc est ancré sur la HAIE, pas sur le pied de l'athlète.
-              // Pour un appui au tout dernier moment, cela revient à démarrer
-              // l'arc juste derrière lui : il décolle plus sec, mais il passe
-              // toujours au sommet au-dessus de la haie. L'ancrer sur l'appui
-              // faisait raser la barre dès qu'on s'y prenait tard.
-              const from = snap && next ? next.x - takeoff : n.runDistance;
-              n.airborne = true;
-              jump.current = { from, span: takeoff * 2, time: 0 };
+              if (next && gap <= cfg.hurdleTakeoffZone) {
+                // Appuyer dans la zone ARME le saut sur cette haie ; l'athlète
+                // décollera tout seul au bon endroit. C'est ce qui permet de
+                // garder un vol court sans exiger un appui à la milliseconde.
+                armed.current = next.x;
+              } else {
+                // Loin de toute haie : un simple bond, qui ne fige rien.
+                n.airborne = true;
+                jump.current = {
+                  from: n.runDistance,
+                  span: cfg.hurdleJumpSpan,
+                  time: 0,
+                  snapped: false,
+                };
+              }
+            }
+
+            // Décollage : TOUJOURS à la même distance de la barre. Le sommet
+            // de l'arc tombe donc pile dessus, et le vol dure autant quel que
+            // soit le moment de l'appui.
+            if (armed.current !== null && !n.airborne) {
+              const from = armed.current - cfg.hurdleTakeoff;
+              if (n.runDistance >= from) {
+                n.airborne = true;
+                jump.current = { from, span: cfg.hurdleTakeoff * 2, time: 0, snapped: true };
+                armed.current = null;
+              }
             }
             if (n.airborne) {
               jump.current.time += dt;
@@ -410,7 +442,8 @@ export function useTrackFieldGame(): {
       restart: () => {
         lastRun.current = null;
         cadence.current = 0;
-        jump.current = { from: 0, span: 0, time: 0 };
+        jump.current = { from: 0, span: 0, time: 0, snapped: false };
+        armed.current = null;
         actionHeld.current = false;
         actionPressed.current = false;
         setState(initial());

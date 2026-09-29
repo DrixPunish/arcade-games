@@ -497,3 +497,57 @@ test('en fin de tableau Blinky serre vraiment, meme en phase de repli', () => {
   // Sans Elroy il partait se replier dans son coin haut-droit et n arrivait jamais.
   expect(best).toBeLessThan(2);
 });
+
+/* --------------------------------------------------- sprite de Pac-Man --- */
+
+const SPR: any = await import(`${ROOT}/games/pacman/sprites.ts`);
+const ART: any = await import(`${ROOT}/lib/pixelArt.ts`);
+
+/** Centre de gravite des pixels pleins, en colonnes et rangees. */
+function centroid(bmp: readonly string[]) {
+  let sc = 0, sr = 0, n = 0;
+  for (let r = 0; r < bmp.length; r += 1) for (let c = 0; c < bmp[r].length; c += 1) {
+    if (bmp[r][c] === 'X') { sc += c; sr += r; n += 1; }
+  }
+  return { col: sc / n, row: sr / n, filled: n };
+}
+
+test('la bouche s ouvre bien dans la direction du deplacement', () => {
+  const mid = (SPR.PAC_PIXELS - 1) / 2;
+  // La bouche etant la partie MANQUANTE, la masse penche a l'oppose.
+  const expected = { right: 'gauche', left: 'droite', up: 'bas', down: 'haut' } as const;
+  for (const dir of ['right', 'left', 'up', 'down'] as const) {
+    const b = ART.rotateBitmap(SPR.PAC_CYCLE[0], SPR.PAC_TURNS[dir]);
+    const g = centroid(b);
+    console.log(`  -> ${dir.padEnd(5)} : masse en col ${g.col.toFixed(2)} rangee ${g.row.toFixed(2)} (centre ${mid}) -> penche vers le ${expected[dir]}`);
+    if (dir === 'right') expect(g.col).toBeLessThan(mid - 0.3);
+    if (dir === 'left') expect(g.col).toBeGreaterThan(mid + 0.3);
+    if (dir === 'up') expect(g.row).toBeGreaterThan(mid + 0.3);
+    if (dir === 'down') expect(g.row).toBeLessThan(mid - 0.3);
+  }
+});
+
+test('le battement va de la bouche grande ouverte au disque plein', () => {
+  const sizes = SPR.PAC_CYCLE.map((b: any) => centroid(b).filled);
+  console.log(`  -> pixels pleins au fil du battement : ${sizes.join(' -> ')}`);
+  // [grand ouvert, mi-ouvert, ferme, mi-ouvert] : le cycle doit etre
+  // symetrique, sinon la mastication paraît boiteuse.
+  expect(sizes[0]).toBeLessThan(sizes[1]);
+  expect(sizes[1]).toBeLessThan(sizes[2]);
+  expect(sizes[3]).toBe(sizes[1]);
+  // Ferme = un disque entier, sans encoche.
+  expect(SPR.PAC_CYCLE[2].every((l: string) => !l.includes('X.X'))).toBe(true);
+});
+
+test('la sequence de mort s efface progressivement', () => {
+  const sizes = SPR.PAC_DEATH.map((b: any) => centroid(b).filled);
+  console.log(`  -> pixels pleins pendant la mort : ${sizes.join(' -> ')}`);
+  for (let i = 1; i < sizes.length; i += 1) expect(sizes[i]).toBeLessThan(sizes[i - 1]);
+  expect(sizes[sizes.length - 1]).toBeLessThan(10);
+});
+
+test('une rotation de quatre quarts de tour revient au point de depart', () => {
+  const b = SPR.PAC_CYCLE[0];
+  expect(ART.rotateBitmap(b, 4)).toEqual(b);
+  expect(ART.rotateBitmap(ART.rotateBitmap(b, 1), 3)).toEqual(b);
+});

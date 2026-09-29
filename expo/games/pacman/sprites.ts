@@ -100,39 +100,161 @@ export const EYE_LOOK: Record<Dir, { x: number; y: number }> = {
   right: { x: 1, y: 0 },
 };
 
-/** Angle de rotation du sprite de Pac-Man, en degrés. */
-export const PAC_ROTATION: Record<Dir, number> = { right: 0, down: 90, left: 180, up: 270 };
+/* ------------------------------------------------------------ Pac-Man ---- */
 
 /**
- * Le secteur de Pac-Man, bouche ouverte de `mouthDeg` degrés de part et
- * d'autre de l'axe. Un `<Path>` recalculé par image, mais c'est un seul nœud
- * et une poignée de nombres : moins cher qu'une grille de 14 sur 14.
+ * Pac-Man en pixels, comme le reste du jeu : un disque de 13 pixels privé du
+ * secteur de sa bouche. Les grilles sont calculées puis figées ici, pas
+ * recalculées à l'affichage.
+ *
+ * Seules les trois images tournées vers la DROITE sont écrites ; les autres
+ * directions s'obtiennent par quarts de tour (cf. `rotateBitmap`). Sur la
+ * borne, l'animation enchaîne grand ouvert, mi-ouvert, fermé, mi-ouvert, au
+ * rythme du déplacement — c'est ce battement qui fait le personnage, bien
+ * plus que sa forme.
  */
-export function pacPath(radius: number, mouthDeg: number): string {
-  const a = (mouthDeg * Math.PI) / 180;
-  if (a < 0.01) {
-    // Bouche fermée : un disque plein, qu'aucun secteur ne sait décrire.
-    return `M ${-radius} 0 a ${radius} ${radius} 0 1 0 ${radius * 2} 0 a ${radius} ${radius} 0 1 0 ${-radius * 2} 0 Z`;
-  }
-  const x = radius * Math.cos(a);
-  const y = radius * Math.sin(a);
-  // Grand arc dès que la bouche dépasse le demi-tour, sinon le secteur
-  // s'inverse et Pac-Man devient une part de tarte.
-  const large = a < Math.PI / 2 ? 1 : 0;
-  return `M 0 0 L ${x.toFixed(2)} ${-y.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${x.toFixed(2)} ${y.toFixed(2)} Z`;
-}
+const PAC_CLOSED: Bitmap = [
+  '....XXXXX....',
+  '..XXXXXXXXX..',
+  '.XXXXXXXXXXX.',
+  '.XXXXXXXXXXX.',
+  'XXXXXXXXXXXXX',
+  'XXXXXXXXXXXXX',
+  'XXXXXXXXXXXXX',
+  'XXXXXXXXXXXXX',
+  'XXXXXXXXXXXXX',
+  '.XXXXXXXXXXX.',
+  '.XXXXXXXXXXX.',
+  '..XXXXXXXXX..',
+  '....XXXXX....',
+];
+
+const PAC_HALF: Bitmap = [
+  '....XXXXX....',
+  '..XXXXXXXXX..',
+  '.XXXXXXXXXXX.',
+  '.XXXXXXXXXXX.',
+  'XXXXXXXXXXX..',
+  'XXXXXXXXX....',
+  'XXXXXX.......',
+  'XXXXXXXXX....',
+  'XXXXXXXXXXX..',
+  '.XXXXXXXXXXX.',
+  '.XXXXXXXXXXX.',
+  '..XXXXXXXXX..',
+  '....XXXXX....',
+];
+
+const PAC_OPEN: Bitmap = [
+  '....XXXXX....',
+  '..XXXXXXXXX..',
+  '.XXXXXXXXXX..',
+  '.XXXXXXXXX...',
+  'XXXXXXXXX....',
+  'XXXXXXXX.....',
+  'XXXXXX.......',
+  'XXXXXXXX.....',
+  'XXXXXXXXX....',
+  '.XXXXXXXXX...',
+  '.XXXXXXXXXX..',
+  '..XXXXXXXXX..',
+  '....XXXXX....',
+];
+
+export const PAC_PIXELS = 13;
 
 /**
- * Ouverture de la bouche au fil de la foulée : elle s'ouvre puis se referme,
- * jamais en sautant d'un état à l'autre.
+ * Le battement de la bouche : grand ouvert, mi-ouvert, fermé, mi-ouvert.
+ * Quatre images et non trois, pour que la fermeture et l'ouverture prennent
+ * le même temps — sans quoi la mastication paraît boiteuse.
  */
-export const mouthAngle = (phase: number): number => {
-  const wave = Math.abs(((phase % 1) * 2) - 1); // 1 -> 0 -> 1
-  // Grande ouverte, la bouche fait près d'un quart de tour de chaque côté.
-  // À 36 degrés elle restait une simple encoche : Pac-Man ressemblait à un
-  // citron, et on ne voyait pas dans quel sens il allait.
-  return 7 + wave * 41;
-};
+export const PAC_CYCLE: readonly Bitmap[] = [PAC_OPEN, PAC_HALF, PAC_CLOSED, PAC_HALF];
+
+/**
+ * La mort : la bouche s'ouvre jusqu'à ne plus rien laisser. Sur la borne elle
+ * s'ouvre vers le HAUT ; ces images regardent à droite comme les autres, et
+ * l'écran leur applique le quart de tour voulu.
+ */
+export const PAC_DEATH: readonly Bitmap[] = [
+  [
+    '....XXXXX....',
+    '..XXXXXX.....',
+    '.XXXXXXX.....',
+    '.XXXXXXX.....',
+    'XXXXXXX......',
+    'XXXXXXX......',
+    'XXXXXX.......',
+    'XXXXXXX......',
+    'XXXXXXX......',
+    '.XXXXXXX.....',
+    '.XXXXXXX.....',
+    '..XXXXXX.....',
+    '....XXXXX....',
+  ],
+  [
+    '....X........',
+    '..XXXX.......',
+    '.XXXXX.......',
+    '.XXXXX.......',
+    'XXXXXX.......',
+    'XXXXXX.......',
+    'XXXXXX.......',
+    'XXXXXX.......',
+    'XXXXXX.......',
+    '.XXXXX.......',
+    '.XXXXX.......',
+    '..XXXX.......',
+    '....X........',
+  ],
+  [
+    '.............',
+    '.............',
+    '.XX..........',
+    '.XXX.........',
+    'XXXXX........',
+    'XXXXXX.......',
+    'XXXXXX.......',
+    'XXXXXX.......',
+    'XXXXX........',
+    '.XXX.........',
+    '.XX..........',
+    '.............',
+    '.............',
+  ],
+  [
+    '.............',
+    '.............',
+    '.............',
+    '.............',
+    'XX...........',
+    'XXXX.........',
+    'XXXXXX.......',
+    'XXXX.........',
+    'XX...........',
+    '.............',
+    '.............',
+    '.............',
+    '.............',
+  ],
+  [
+    '.............',
+    '.............',
+    '.............',
+    '.............',
+    '.............',
+    '.............',
+    'XXXXXX.......',
+    '.............',
+    '.............',
+    '.............',
+    '.............',
+    '.............',
+    '.............',
+  ],
+];
+
+/** Quarts de tour à appliquer à une grille tournée vers la droite. */
+export const PAC_TURNS: Record<Dir, number> = { right: 0, down: 1, left: 2, up: 3 };
 
 /** Les cerises du premier niveau. */
 export const CHERRIES: Bitmap = [

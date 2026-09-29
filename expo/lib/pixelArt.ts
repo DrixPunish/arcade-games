@@ -87,3 +87,26 @@ export function spritePathsByKey(
   }
   return out;
 }
+
+/**
+ * Fait pivoter une grille d'un quart de tour dans le sens des aiguilles.
+ *
+ * Cela évite d'écrire quatre fois le même sprite pour ses quatre
+ * orientations : on dessine celui qui regarde à droite, et les trois autres
+ * s'en déduisent. La grille doit être carrée.
+ */
+export function rotateBitmap(bitmap: Bitmap, quarterTurns: number): Bitmap {
+  let out = bitmap;
+  const turns = ((quarterTurns % 4) + 4) % 4;
+  for (let t = 0; t < turns; t += 1) {
+    const size = out.length;
+    const next: string[] = [];
+    for (let row = 0; row < size; row += 1) {
+      let line = '';
+      for (let col = 0; col < size; col += 1) line += out[size - 1 - col][row];
+      next.push(line);
+    }
+    out = next;
+  }
+  return out;
+}

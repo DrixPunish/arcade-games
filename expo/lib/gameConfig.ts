@@ -167,10 +167,24 @@ export const CONFIG = {
      * franchie. Rien à l'écran ne permettait d'apprendre le bon moment.
      */
     hurdleTakeoffZone: 4.5,
-    /** Appel minimal : sauter le nez sur la haie reste un vrai saut. */
-    hurdleMinTakeoff: 1.2,
-    /** Durée maximale d'un saut, garde-fou si la vitesse tombe très bas. */
-    hurdleJumpMaxTime: 1.4,
+    /**
+     * Distance d'appel devant la haie : l'athlète décolle TOUJOURS à ce
+     * point-là, quel que soit l'endroit de la zone où l'on a appuyé. Le vol
+     * couvre donc le double, soit 2,6 m sur les 9,14 m qui séparent deux
+     * haies.
+     *
+     * Faire dépendre la portée du moment de l'appui donnait des vols de plus
+     * de 5 m : on passait 43 % de la course en l'air, donc 43 % sans pouvoir
+     * marteler, et le minima devenait inatteignable même sans toucher une
+     * seule haie.
+     */
+    hurdleTakeoff: 1.3,
+    /**
+     * Durée maximale d'un saut, pur garde-fou si la vitesse tombe très bas.
+     * À 1,4 s un vol lent était tronqué en plein milieu et l'athlète
+     * retombait sur la barre sans avoir rien fait de mal.
+     */
+    hurdleJumpMaxTime: 2.5,
     /**
      * Ce qu'il reste de vitesse après avoir renversé une haie. Mettre zéro
      * était un mur : on ne repartait plus.

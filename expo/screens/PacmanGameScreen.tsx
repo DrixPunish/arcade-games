@@ -5,7 +5,7 @@ import Svg, { Circle, G, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { ArcadeButton } from '../components/ArcadeButton';
 import { PacmanControls } from '../components/TouchPad';
 import { HighScorePrompt } from '../components/HighScorePrompt';
-import { spritePath, spritePathsByKey } from '../lib/pixelArt';
+import { rotateBitmap, spritePath, spritePathsByKey } from '../lib/pixelArt';
 import { DOOR, POWER_PELLETS, TILE, VIEW, WALL_PATH, dotsPath } from '../games/pacman/geometry';
 import { COLS } from '../games/pacman/maze';
 import {
@@ -20,15 +20,17 @@ import {
   GHOST_COLORS,
   GHOST_FRAMES,
   GHOST_PIXELS,
-  PAC_ROTATION,
+  PAC_CYCLE,
+  PAC_DEATH,
+  PAC_PIXELS,
+  PAC_TURNS,
   SCARED_FACE,
   SCARED_FACE_ROW,
-  mouthAngle,
-  pacPath,
 } from '../games/pacman/sprites';
-import { Ghost, PacmanState, usePacmanGame } from '../games/pacman/usePacmanGame';
+import { Dir, Ghost, PacmanState, usePacmanGame } from '../games/pacman/usePacmanGame';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 import { getArcadeSounds } from '../lib/gameSounds';
+import { CONFIG } from '../lib/gameConfig';
 
 /* ------------------------------------------------------------- le décor -- */
 
@@ -159,19 +161,55 @@ function GhostSprite({
 
 /* ------------------------------------------------------------ Pac-Man ---- */
 
-const LIFE_ICON = pacPath(TILE * 0.55, 32);
+const PAC_W = PAC_RADIUS * 2;
+const PAC_PIXEL = PAC_W / PAC_PIXELS;
+
+/**
+ * Les quatre directions fois les quatre images du battement, plus la séquence
+ * de mort : dix-neuf tracés en tout, tous calculés au chargement. Pac-Man ne
+ * coûte donc rien par image, alors qu'un secteur recalculé à chaque fois lui
+ * donnait par ailleurs un air de part de tarte plutôt que de sprite.
+ */
+const pathOf = (bitmap: readonly string[], turns: number): string =>
+  spritePath(rotateBitmap(bitmap, turns), -PAC_W / 2, -PAC_W / 2, PAC_PIXEL, PAC_PIXEL);
+
+const PAC_PATHS: Record<Dir, string[]> = {
+  right: PAC_CYCLE.map((b) => pathOf(b, PAC_TURNS.right)),
+  down: PAC_CYCLE.map((b) => pathOf(b, PAC_TURNS.down)),
+  left: PAC_CYCLE.map((b) => pathOf(b, PAC_TURNS.left)),
+  up: PAC_CYCLE.map((b) => pathOf(b, PAC_TURNS.up)),
+};
+// La mort s'ouvre vers le haut, comme sur la borne.
+const DEATH_PATHS = PAC_DEATH.map((b) => pathOf(b, PAC_TURNS.up));
+
+const LIFE_ICON = spritePath(
+  rotateBitmap(PAC_CYCLE[0], PAC_TURNS.right),
+  -6,
+  -6,
+  12 / PAC_PIXELS,
+  12 / PAC_PIXELS,
+);
 
 function PacSprite({ pac, dying }: { pac: PacmanState['pac']; dying: number }): React.ReactElement {
-  // À la mort, la bouche s'ouvre en grand jusqu'à faire disparaître le disque.
-  const mouth = dying > 0 ? Math.min(180, dying * 220) : mouthAngle(pac.mouth);
+  let d: string;
+  if (dying > 0) {
+    const step = Math.floor((dying / CONFIG.pacman.dyingSeconds) * (DEATH_PATHS.length + 1));
+    // Passé la dernière image, il ne reste plus rien à dessiner.
+    d = step < DEATH_PATHS.length ? DEATH_PATHS[step] : '';
+  } else {
+    // Le battement suit la DISTANCE parcourue : il s'arrête donc tout seul
+    // quand Pac-Man bute contre un mur, comme sur la borne.
+    d = PAC_PATHS[pac.dir][Math.floor(pac.mouth * PAC_CYCLE.length) % PAC_CYCLE.length];
+  }
+  if (!d) return <G />;
   return (
     <G
       transform={`translate(${(pac.col * TILE + TILE / 2).toFixed(2)}, ${(
         pac.row * TILE +
         TILE / 2
-      ).toFixed(2)}) rotate(${PAC_ROTATION[pac.dir]})`}
+      ).toFixed(2)})`}
     >
-      <Path d={pacPath(PAC_RADIUS, mouth)} fill="#ffe600" />
+      <Path d={d} fill="#ffe600" />
     </G>
   );
 }
