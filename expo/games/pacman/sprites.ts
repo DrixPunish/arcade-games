@@ -11,12 +11,16 @@ import type { Dir, GhostName } from './usePacmanGame';
  *    qu'elles bougent en continu et qu'une grille les rendrait saccadées.
  */
 
-/** Silhouette du fantôme, jupe au repos. */
+/**
+ * Silhouette du fantôme, jupe au repos. Le dôme s'élargit sur quatre rangées
+ * au lieu de trois : avec un galbe trop court, le fantôme lisait comme un
+ * rectangle à coins arrondis plutôt que comme un drap.
+ */
 const GHOST_A: Bitmap = [
-  '....BBBBBB....',
+  '.....BBBB.....',
+  '...BBBBBBBB...',
   '..BBBBBBBBBB..',
   '.BBBBBBBBBBBB.',
-  'BBBBBBBBBBBBBB',
   'BBBBBBBBBBBBBB',
   'BBBBBBBBBBBBBB',
   'BBBBBBBBBBBBBB',
@@ -31,10 +35,10 @@ const GHOST_A: Bitmap = [
 
 /** Même silhouette, jupe décalée : l'alternance donne le flottement. */
 const GHOST_B: Bitmap = [
-  '....BBBBBB....',
+  '.....BBBB.....',
+  '...BBBBBBBB...',
   '..BBBBBBBBBB..',
   '.BBBBBBBBBBBB.',
-  'BBBBBBBBBBBBBB',
   'BBBBBBBBBBBBBB',
   'BBBBBBBBBBBBBB',
   'BBBBBBBBBBBBBB',
@@ -82,6 +86,13 @@ export const FRIGHT_FACE_END = '#ff2b1c';
  * Les fantômes regardent où ils vont : c'est ce qui permet au joueur
  * d'anticiper un virage une fraction de seconde avant qu'il n'arrive.
  */
+/**
+ * Proportions de l'œil, en fraction de la largeur du fantôme. Elles étaient
+ * bien trop généreuses : deux gros globes occupaient tout le visage et
+ * donnaient un air de peluche au lieu du regard fixe de la borne.
+ */
+export const EYE = { offsetX: 0.2, offsetY: -0.08, white: 0.13, pupil: 0.065, look: 0.055 };
+
 export const EYE_LOOK: Record<Dir, { x: number; y: number }> = {
   up: { x: 0, y: -1 },
   down: { x: 0, y: 1 },
@@ -117,7 +128,10 @@ export function pacPath(radius: number, mouthDeg: number): string {
  */
 export const mouthAngle = (phase: number): number => {
   const wave = Math.abs(((phase % 1) * 2) - 1); // 1 -> 0 -> 1
-  return 4 + wave * 36;
+  // Grande ouverte, la bouche fait près d'un quart de tour de chaque côté.
+  // À 36 degrés elle restait une simple encoche : Pac-Man ressemblait à un
+  // citron, et on ne voyait pas dans quel sens il allait.
+  return 7 + wave * 41;
 };
 
 /** Les cerises du premier niveau. */

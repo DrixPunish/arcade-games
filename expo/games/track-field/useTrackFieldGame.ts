@@ -192,8 +192,12 @@ export function useTrackFieldGame(): {
   const cadence = useRef(0);
   const actionHeld = useRef(false);
   const actionPressed = useRef(false);
-  /** Position et durée de l'appel, pour un franchissement mesuré en distance. */
-  const jump = useRef({ from: 0, time: 0 });
+  /**
+   * L'appel en cours : d'où il part, combien de mètres il couvre, et depuis
+   * combien de temps. La portée n'est pas fixe — elle est calculée pour que
+   * le sommet de l'arc tombe sur la haie visée.
+   */
+  const jump = useRef({ from: 0, span: 0, time: 0 });
 
   const tapRun = (which: 'a' | 'b'): void => {
     if (lastRun.current !== which) {
@@ -262,13 +266,34 @@ export function useTrackFieldGame(): {
             // Le franchissement se mesure en DISTANCE parcourue, pas en temps :
             // il vaut donc autant à faible allure qu'à pleine vitesse.
             if (actionPressed.current && !n.airborne && n.phase === 'running') {
+              // Le saut se CALE sur la prochaine haie : on prend autant de
+              // mètres après elle qu'on en avait avant, si bien que le sommet
+              // de l'arc tombe pile au-dessus. C'est ce qui rend le geste
+              // lisible — et donc apprenable.
+              // La PREMIÈRE haie non franchie, sans exiger qu'elle soit encore
+              // devant : la distance a déjà été intégrée plus haut dans cette
+              // même image, si bien qu'un appui au tout dernier moment visait
+              // la haie SUIVANTE et laissait passer celle qu'on voulait sauter.
+              const next = n.hurdles.find((h) => !h.cleared);
+              const gap = next ? next.x - n.runDistance : Infinity;
+              const snap = gap <= cfg.hurdleTakeoffZone;
+              const takeoff = snap
+                ? Math.max(cfg.hurdleMinTakeoff, gap)
+                : cfg.hurdleJumpSpan / 2;
+              // L'arc est ancré sur la HAIE, pas sur le pied de l'athlète.
+              // Pour un appui au tout dernier moment, cela revient à démarrer
+              // l'arc juste derrière lui : il décolle plus sec, mais il passe
+              // toujours au sommet au-dessus de la haie. L'ancrer sur l'appui
+              // faisait raser la barre dès qu'on s'y prenait tard.
+              const from = snap && next ? next.x - takeoff : n.runDistance;
               n.airborne = true;
-              jump.current = { from: n.runDistance, time: 0 };
+              jump.current = { from, span: takeoff * 2, time: 0 };
             }
             if (n.airborne) {
               jump.current.time += dt;
-              const progress = (n.runDistance - jump.current.from) / cfg.hurdleJumpSpan;
-              n.flightHeight = Math.min(1, progress);
+              const progress = (n.runDistance - jump.current.from) / jump.current.span;
+              // Un ARC, pas une rampe : on monte puis on redescend.
+              n.flightHeight = Math.max(0, Math.sin(Math.min(1, progress) * Math.PI));
               if (progress >= 1 || jump.current.time > cfg.hurdleJumpMaxTime) {
                 n.airborne = false;
                 n.flightHeight = 0;
@@ -385,7 +410,7 @@ export function useTrackFieldGame(): {
       restart: () => {
         lastRun.current = null;
         cadence.current = 0;
-        jump.current = { from: 0, time: 0 };
+        jump.current = { from: 0, span: 0, time: 0 };
         actionHeld.current = false;
         actionPressed.current = false;
         setState(initial());

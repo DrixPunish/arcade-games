@@ -28,6 +28,8 @@ import {
   H,
   LANES,
   MARKERS,
+  HURDLE_HEIGHT,
+  HURDLE_LIFT,
   PX_PER_M,
   SKY,
   TAKEOFF_ZONE,
@@ -85,7 +87,11 @@ export function TrackFieldGameScreen({
 
   // Hauteur du sauteur : le saut de haies est un arc court, le saut en
   // longueur suit la trajectoire calculée par le moteur.
-  const hopHeight = state.airborne ? Math.sin(state.flightHeight * Math.PI) * 26 : 0;
+  // `flightHeight` est déjà l'arc (0 au sol, 1 au sommet) : le moteur s'en
+  // charge, l'écran ne fait que le mettre à l'échelle. Le sommet dépasse
+  // franchement la haie, sans quoi un franchissement réussi ressemblait à un
+  // passage au travers.
+  const hopHeight = state.airborne ? state.flightHeight * HURDLE_LIFT : 0;
   const flightLift = state.phase === 'flying' ? state.flightHeight * 6 : 0;
   const athleteX =
     state.phase === 'flying' && event === 'longJump'
@@ -205,17 +211,37 @@ export function TrackFieldGameScreen({
             </>
           )}
 
-          {/* Haies : deux pieds et une barre */}
+          {/* Haies : la zone d'appel au sol, puis deux pieds et une barre */}
           {event === 'hurdles' &&
             state.hurdles.map((h, i) => {
               const x = toScreen(h.x);
-              if (x < -20 || x > W + 20) return null;
+              if (x < -80 || x > W + 20) return null;
               const colour = h.cleared ? '#8a6a55' : '#eaffff';
+              const zoneW = CONFIG.trackField.hurdleTakeoffZone * PX_PER_M;
               return (
                 <React.Fragment key={`h${i}`}>
-                  <Rect x={x} y={GROUND - 22} width={10} height={3} fill={colour} />
-                  <Rect x={x} y={GROUND - 22} width={2} height={22} fill={colour} />
-                  <Rect x={x + 8} y={GROUND - 22} width={2} height={22} fill={colour} />
+                  {/* Appuyer sur cette bande cale le saut sur la haie. */}
+                  {h.cleared ? null : (
+                    <>
+                      <Rect
+                        x={x - zoneW}
+                        y={GROUND - 3}
+                        width={zoneW}
+                        height={3}
+                        fill="rgba(255,224,131,0.5)"
+                      />
+                      <Rect x={x - zoneW} y={GROUND - 8} width={2} height={8} fill="#ffe083" />
+                    </>
+                  )}
+                  <Rect x={x} y={GROUND - HURDLE_HEIGHT} width={10} height={3} fill={colour} />
+                  <Rect x={x} y={GROUND - HURDLE_HEIGHT} width={2} height={HURDLE_HEIGHT} fill={colour} />
+                  <Rect
+                    x={x + 8}
+                    y={GROUND - HURDLE_HEIGHT}
+                    width={2}
+                    height={HURDLE_HEIGHT}
+                    fill={colour}
+                  />
                 </React.Fragment>
               );
             })}

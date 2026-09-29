@@ -417,3 +417,83 @@ test('les fantomes se retournent au changement de phase', () => {
   console.log(`  -> ${forced} demi-tour(s) force(s) en 10 s`);
   expect(forced).toBeGreaterThan(0);
 });
+
+/* ------------------------------------------------- qualite de la chasse -- */
+
+/**
+ * Chasse pure, hors du reste du jeu : un fantome, une cible immobile, et on
+ * compte les cases jusqu'a la prise. C'est le seul controle qui dise vraiment
+ * si l'algorithme de choix vaut quelque chose ; verifier la cible ne suffit
+ * pas, encore faut-il que le chemin y mene.
+ */
+function chaseFrom(name: string, start: [number, number], pacTile: [number, number]) {
+  const g = { name, col: start[0], row: start[1], dir: 'left' as any };
+  const pac = { col: pacTile[0], row: pacTile[1], dir: 'left' as any };
+  const seen = new Map<string, number>();
+  for (let step = 0; step < 400; step += 1) {
+    if (Math.round(g.col) === pacTile[0] && Math.round(g.row) === pacTile[1]) return step;
+    const dir = P.ghostChoose(g, P.ghostTarget(name, g, pac, { col: start[0], row: start[1] }, true), false);
+    const d: Record<string, [number, number]> = STEPS as any;
+    g.col += d[dir][0]; g.row += d[dir][1]; g.dir = dir;
+    M.wrapTunnel(g);
+    const k = `${g.col},${g.row},${g.dir}`;
+    seen.set(k, (seen.get(k) ?? 0) + 1);
+    if ((seen.get(k) ?? 0) >= 3) return -1; // il tourne en rond
+  }
+  return -1;
+}
+
+test('Blinky rejoint une cible immobile depuis n importe quel coin', () => {
+  const pac: [number, number] = [13, 23];
+  const spots: [number, number][] = [[1, 1], [26, 1], [1, 29], [26, 29], [21, 5], [9, 14], [6, 23]];
+  const failures: string[] = [];
+  for (const spot of spots) {
+    const steps = chaseFrom('blinky', spot, pac);
+    console.log(`  -> depuis ${spot.join(',')} : ${steps < 0 ? 'TOURNE EN ROND' : `${steps} cases`}`);
+    if (steps < 0) failures.push(spot.join(','));
+  }
+  expect(failures).toEqual([]);
+});
+
+test('Cruise Elroy : Blinky accelere et ne se replie plus en fin de tableau', () => {
+  const total = 244;
+  console.log(`  -> gommes restantes ${total} : palier ${P.elroyStage(total, 1)}`);
+  console.log(`  -> gommes restantes 20  : palier ${P.elroyStage(20, 1)}`);
+  console.log(`  -> gommes restantes 10  : palier ${P.elroyStage(10, 1)}`);
+  expect(P.elroyStage(total, 1)).toBe(0);
+  expect(P.elroyStage(20, 1)).toBe(1);
+  expect(P.elroyStage(10, 1)).toBe(2);
+  // Elroy va plus vite qu'un fantome ordinaire du niveau 1.
+  expect(cfg.elroy.speed1).toBeGreaterThan(cfg.speed.ghost);
+  expect(cfg.elroy.speed2).toBeGreaterThan(cfg.elroy.speed1);
+  // Et la traque commence plus tot a mesure que les niveaux montent.
+  expect(P.elroyStage(40, 6)).toBeGreaterThan(P.elroyStage(40, 1));
+});
+
+test('en fin de tableau Blinky serre vraiment, meme en phase de repli', () => {
+  const g = mount();
+  g.begin();
+  // On vide le tableau sauf quelques gommes : Elroy doit s'enclencher.
+  const few = new Uint8Array(g.state.pellets.length);
+  few[20 * COLS + 1] = 1;
+  g.state.pellets = few;
+  g.state.dotsLeft = 1;
+  // Pac-Man immobile dans un coin bas, Blinky lache au coin oppose.
+  g.state.pac.col = 1; g.state.pac.row = 26; g.state.pac.dir = 'left';
+  const blinky = g.state.ghosts[0];
+  blinky.phase = 'out'; blinky.col = 26; blinky.row = 5; blinky.dir = 'left'; blinky.path = [];
+
+  let best = 99;
+  for (let i = 0; i < 60 * 25; i += 1) {
+    // On fige Pac-Man : on mesure Blinky, pas la fuite.
+    g.state.pac.col = 1; g.state.pac.row = 26;
+    g.step();
+    const b = g.state.ghosts[0];
+    if (b.phase === 'out' && !b.eyes) {
+      best = Math.min(best, Math.abs(b.col - 1) + Math.abs(b.row - 26));
+    }
+  }
+  console.log(`  -> Blinky s est approche jusqu a ${best.toFixed(1)} cases de Pac-Man immobile`);
+  // Sans Elroy il partait se replier dans son coin haut-droit et n arrivait jamais.
+  expect(best).toBeLessThan(2);
+});

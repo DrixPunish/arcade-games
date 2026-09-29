@@ -42,6 +42,10 @@ export const FLOODLIGHTS = [168, 300].map((x) => ({ x, y: 6 }));
 /** Lignes de couloir de la piste. */
 /** Longueur de la zone d'appel signalée avant la planche, en mètres. */
 export const TAKEOFF_ZONE = 8;
+/** Hauteur d'une haie, en pixels. L'arc de saut doit la dépasser franchement. */
+export const HURDLE_HEIGHT = 18;
+/** Élévation de l'athlète au sommet de son saut de haies, en pixels. */
+export const HURDLE_LIFT = 40;
 
 export const LANES = [TRACK_TOP + 18, GROUND, GROUND + 22];
 

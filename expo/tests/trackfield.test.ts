@@ -230,3 +230,89 @@ test('sauter au bon moment franchit la haie sans casser l elan', () => {
   console.log(`  -> haie franchie : ${before.toFixed(1)} -> ${g.state.speed.toFixed(1)} m/s, "${g.state.message}"`);
   expect(g.state.message).not.toContain('Haie');
 });
+
+/* ------------------------------------------------- lisibilite des haies -- */
+
+const STADIUM: any = await import(`${ROOT}/games/track-field/stadium.ts`);
+
+/**
+ * Saute une haie en appuyant `offset` metres avant elle, et rend compte de ce
+ * qui s'est passe AU MOMENT PRECIS du franchissement.
+ */
+function jumpAt(offset: number) {
+  const g = mount();
+  g.state.eventIndex = 3;
+  const target = 13.72; // la premiere haie
+  let pressed = false;
+  let liftAtCross = -1;
+  let realOffset = 0;
+  for (let i = 0; i < 60 * 30 && liftAtCross < 0 && g.state.phase !== 'result'; i += 1) {
+    if (!pressed && g.state.runDistance >= target - offset) {
+      // Un joueur ne peut pas appuyer entre deux images : l'appel reel est
+      // donc un peu plus tardif que demande, et c'est ce qu'on mesure.
+      realOffset = target - g.state.runDistance;
+      g.controls.action(true);
+      pressed = true;
+    } else if (pressed) {
+      g.controls.action(false);
+    }
+    const before = g.state.runDistance;
+    g.hammer(1);
+    // La haie est evaluee DANS la frame ou la distance la depasse : c'est la,
+    // et seulement la, que la hauteur affichee doit etre au-dessus d'elle.
+    if (before < target && g.state.runDistance >= target) {
+      liftAtCross = g.state.flightHeight * STADIUM.HURDLE_LIFT;
+    }
+  }
+  g.hammer(2);
+  return { knocked: g.state.message.includes('Haie'), liftAtCross, realOffset };
+}
+
+test('on franchit la haie depuis toute la zone d appel marquee au sol', () => {
+  const zone = CONFIG.trackField.hurdleTakeoffZone;
+  const lines: string[] = [];
+  let worstLift = Infinity;
+  // On balaie toute la bande dessinee, bords compris.
+  for (let off = 0.2; off <= zone; off += 0.3) {
+    const r = jumpAt(off);
+    lines.push(`    appel a ${r.realOffset.toFixed(2)} m de la haie : ${r.knocked ? 'RENVERSEE' : 'franchie'}, hauteur au passage ${r.liftAtCross.toFixed(0)} px`);
+    expect(`${off.toFixed(1)}:${r.knocked}`).toBe(`${off.toFixed(1)}:false`);
+    worstLift = Math.min(worstLift, r.liftAtCross);
+  }
+  console.log('  zone d appel -> franchissement');
+  for (const l of lines) console.log(l);
+  console.log(`  -> hauteur minimale au passage : ${worstLift.toFixed(0)} px (haie ${STADIUM.HURDLE_HEIGHT} px)`);
+  // Le lien entre la regle et l'image : si le moteur compte la haie franchie,
+  // l'athlete doit etre VU au-dessus. Sans ca le joueur ne peut rien apprendre.
+  expect(worstLift).toBeGreaterThan(STADIUM.HURDLE_HEIGHT);
+});
+
+test('appuyer trop tot rate la haie, et c est lisible', () => {
+  const far = jumpAt(CONFIG.trackField.hurdleTakeoffZone + 3);
+  console.log(`  -> appel 3 m avant la zone : ${far.knocked ? 'renversee' : 'franchie'}`);
+  expect(far.knocked).toBe(true);
+});
+
+test('le 110 m haies se qualifie meme en renversant deux haies', () => {
+  const g = mount();
+  g.state.eventIndex = 3;
+  let skipped = 0;
+  for (let i = 0; i < 60 * 60 && g.state.phase !== 'result'; i += 1) {
+    const next = g.state.hurdles.find((h: any) => !h.cleared);
+    if (next && !g.state.airborne) {
+      const gap = next.x - g.state.runDistance;
+      // On rate volontairement les deux premieres haies.
+      const deliberate = skipped < 2 && next.x <= 13.72 + 9.14;
+      if (gap > 0 && gap <= CONFIG.trackField.hurdleTakeoffZone - 1 && !deliberate) {
+        g.controls.action(true); g.hammer(1); g.controls.action(false);
+        continue;
+      }
+      if (deliberate && gap < 0.2) skipped += 1;
+    }
+    g.hammer(1);
+  }
+  const minima = CONFIG.trackField.qualify.hurdles;
+  console.log(`  -> 2 haies renversees volontairement : ${g.state.result.toFixed(2)} s (minima ${minima})`);
+  expect(g.state.phase).toBe('result');
+  expect(g.state.result).toBeLessThan(minima);
+});

@@ -148,12 +148,27 @@ export const CONFIG = {
       hurdles: 14.5,
     },
     /**
-     * Longueur du saut de haies, en MÈTRES et non en secondes. Une durée fixe
-     * donnait un saut de 1,9 m à faible allure : on retombait sur la haie sans
-     * pouvoir rien y faire. En distance, le franchissement vaut à toute vitesse.
-     * Les haies sont espacées de 9,14 m, ce qui laisse de quoi se replacer.
+     * Longueur d'un saut de haies « à vide », en MÈTRES et non en secondes.
+     * Une durée fixe donnait un saut de 1,9 m à faible allure : on retombait
+     * sur la haie sans pouvoir rien y faire.
+     *
+     * Ce chiffre ne sert QUE lorsqu'on saute loin de toute haie. Devant une
+     * haie, le saut se cale sur elle (cf. `hurdleTakeoffZone`).
      */
     hurdleJumpSpan: 5,
+    /**
+     * Profondeur de la zone d'appel marquée au sol devant chaque haie.
+     *
+     * Appuyer dedans CALE le saut sur la haie : le sommet de l'arc tombe pile
+     * au-dessus d'elle. Sans ce calage, le saut partait de l'endroit de
+     * l'appui avec son sommet au milieu — on franchissait donc la haie tout
+     * au début ou tout à la fin de l'arc, c'est-à-dire à ras du sol, et
+     * l'athlète paraissait traverser la haie alors que le moteur la comptait
+     * franchie. Rien à l'écran ne permettait d'apprendre le bon moment.
+     */
+    hurdleTakeoffZone: 4.5,
+    /** Appel minimal : sauter le nez sur la haie reste un vrai saut. */
+    hurdleMinTakeoff: 1.2,
     /** Durée maximale d'un saut, garde-fou si la vitesse tombe très bas. */
     hurdleJumpMaxTime: 1.4,
     /**
@@ -217,6 +232,21 @@ export const CONFIG = {
     fruitPoints: [100, 300, 500, 500, 700, 700, 1000, 1000, 2000, 2000, 3000, 3000, 5000],
     lives: 3,
     extraLifeAt: 10000,
+    /**
+     * « Cruise Elroy » : passé un certain nombre de gommes avalées, Blinky
+     * accélère ET cesse de se replier dans son coin — il traque sans relâche
+     * jusqu'à la fin du tableau.
+     *
+     * C'est ce qui fait la réputation du fantôme rouge, et son absence se
+     * remarque tout de suite : sans elle, Blinky se comporte comme les autres
+     * et la fin de tableau n'a plus aucune tension.
+     */
+    elroy: {
+      dotsLeft1: 20,
+      speed1: 0.8,
+      dotsLeft2: 10,
+      speed2: 0.85,
+    },
     /** Écart en cases sous lequel Pac-Man est attrapé. */
     catchDistance: 0.5,
     /** Temporisations d'ambiance : le « READY! », la mort, le tableau fini. */

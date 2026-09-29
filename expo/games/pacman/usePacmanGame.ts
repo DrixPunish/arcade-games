@@ -131,6 +131,18 @@ export const frightSecondsFor = (level: number): number =>
 export const fruitPointsFor = (level: number): number =>
   cfg.fruitPoints[Math.min(level - 1, cfg.fruitPoints.length - 1)];
 
+/**
+ * Niveau de « Cruise Elroy » de Blinky : 0 normal, 1 puis 2 à mesure que le
+ * tableau se vide. Les seuils montent avec les niveaux, si bien que la traque
+ * démarre de plus en plus tôt.
+ */
+export function elroyStage(dotsLeft: number, level: number): 0 | 1 | 2 {
+  const bonus = Math.min(30, (level - 1) * 4);
+  if (dotsLeft <= cfg.elroy.dotsLeft2 + bonus / 2) return 2;
+  if (dotsLeft <= cfg.elroy.dotsLeft1 + bonus) return 1;
+  return 0;
+}
+
 /* ------------------------------------------------------------ déplacement -- */
 
 type Mover = { col: number; row: number; dir: Dir };
@@ -761,15 +773,20 @@ export function step(prev: PacmanState, dt: number, refs: Refs): PacmanState {
 
     // --- en vadrouille dans le labyrinthe ---
     const inTunnel = Math.round(g.row) === TUNNEL_ROW && (g.col < 6 || g.col > COLS - 7);
+    // Seul Blinky devient Elroy, et seulement tant qu'il est entier.
+    const elroy = g.name === 'blinky' && !g.eyes && !g.frightened ? elroyStage(s.dotsLeft, s.level) : 0;
     let pct: number;
     if (g.eyes) pct = cfg.speed.ghostEyes;
     else if (inTunnel) pct = cfg.speed.ghostTunnel;
     else if (g.frightened) pct = speeds.ghostFrightened;
+    else if (elroy === 2) pct = Math.max(speeds.ghost, cfg.elroy.speed2);
+    else if (elroy === 1) pct = Math.max(speeds.ghost, cfg.elroy.speed1);
     else pct = speeds.ghost;
 
     const target = g.eyes
       ? { col: Math.round(GHOST_DOOR.col), row: GHOST_DOOR.row }
-      : ghostTarget(g.name, g, pac, blinky, chasing);
+      : // Elroy ignore les phases de repli : il ne lâche plus Pac-Man.
+        ghostTarget(g.name, g, pac, blinky, chasing || elroy > 0);
 
     advance(g, cfg.baseSpeed * pct * dt, (at) => ghostChoose(at, target, g.frightened && !g.eyes));
 

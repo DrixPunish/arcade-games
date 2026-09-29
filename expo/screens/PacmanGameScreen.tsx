@@ -11,6 +11,7 @@ import { COLS } from '../games/pacman/maze';
 import {
   CHERRIES,
   CHERRY_PALETTE,
+  EYE,
   EYE_LOOK,
   FRIGHT_BODY,
   FRIGHT_BODY_END,
@@ -31,10 +32,14 @@ import { getArcadeSounds } from '../lib/gameSounds';
 
 /* ------------------------------------------------------------- le décor -- */
 
-const DOT_SIZE = TILE * 0.18;
+const DOT_SIZE = TILE * 0.22;
 const POWER_RADIUS = TILE * 0.42;
-const PAC_RADIUS = TILE * 0.72;
-const GHOST_PIXEL = (TILE * 1.6) / GHOST_PIXELS;
+/**
+ * Sur la borne, Pac-Man fait 13 pixels pour 14 au fantôme. On garde ce
+ * rapport : plus petit, il paraissait dominé par les fantômes.
+ */
+const PAC_RADIUS = (TILE * 1.7 * (13 / 14)) / 2;
+const GHOST_PIXEL = (TILE * 1.7) / GHOST_PIXELS;
 const GHOST_W = GHOST_PIXELS * GHOST_PIXEL;
 
 /**
@@ -111,10 +116,11 @@ function GhostSprite({
   const x = ghost.col * TILE + TILE / 2;
   const y = ghost.row * TILE + TILE / 2;
   const look = EYE_LOOK[ghost.dir];
-  const eyeDx = GHOST_W * 0.19;
-  const eyeDy = -GHOST_W * 0.1;
-  const eyeR = GHOST_W * 0.17;
-  const pupilR = GHOST_W * 0.09;
+  const eyeDx = GHOST_W * EYE.offsetX;
+  const eyeDy = GHOST_W * EYE.offsetY;
+  const eyeR = GHOST_W * EYE.white;
+  const pupilR = GHOST_W * EYE.pupil;
+  const lookR = GHOST_W * EYE.look;
 
   const body = ghost.frightened
     ? ending
@@ -134,14 +140,14 @@ function GhostSprite({
           <Circle cx={-eyeDx} cy={eyeDy} r={eyeR} fill="#ffffff" />
           <Circle cx={eyeDx} cy={eyeDy} r={eyeR} fill="#ffffff" />
           <Circle
-            cx={-eyeDx + look.x * eyeR * 0.5}
-            cy={eyeDy + look.y * eyeR * 0.5}
+            cx={-eyeDx + look.x * lookR}
+            cy={eyeDy + look.y * lookR}
             r={pupilR}
             fill="#1c1cc8"
           />
           <Circle
-            cx={eyeDx + look.x * eyeR * 0.5}
-            cy={eyeDy + look.y * eyeR * 0.5}
+            cx={eyeDx + look.x * lookR}
+            cy={eyeDy + look.y * lookR}
             r={pupilR}
             fill="#1c1cc8"
           />
