@@ -6,7 +6,16 @@ import { ArcadeButton } from '../components/ArcadeButton';
 import { PacmanControls } from '../components/TouchPad';
 import { HighScorePrompt } from '../components/HighScorePrompt';
 import { rotateBitmap, spritePath, spritePathsByKey } from '../lib/pixelArt';
-import { DOOR, POWER_PELLETS, TILE, VIEW, WALL_PATH, dotsPath } from '../games/pacman/geometry';
+import {
+  DOOR,
+  POWER_PELLETS,
+  TILE,
+  VIEW,
+  TOTAL_DOTS,
+  WALL_FILL,
+  WALL_PATH,
+  dotsPath,
+} from '../games/pacman/geometry';
 import { COLS } from '../games/pacman/maze';
 import {
   CHERRIES,
@@ -61,14 +70,18 @@ const fruitTransform = (fruit: { col: number; row: number }): string =>
 /** Les murs ne bougent jamais : un seul tracé, calculé une fois pour toutes. */
 const Walls = React.memo(function Walls(): React.ReactElement {
   return (
-    <Path
-      d={WALL_PATH}
-      stroke="#2645ff"
-      strokeWidth={TILE * 0.17}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill="none"
-    />
+    <>
+      {/* La masse sombre d'abord, le contour lumineux par-dessus. */}
+      <Path d={WALL_FILL} fill="#0b1244" />
+      <Path
+        d={WALL_PATH}
+        stroke="#2f5bff"
+        strokeWidth={TILE * 0.17}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </>
   );
 });
 
@@ -256,6 +269,30 @@ export function PacmanGameScreen({
     if (e.death) sounds.play('pacDeath');
     if (e.extraLife) sounds.play('pacExtraLife');
   });
+
+  /**
+   * Le fond sonore. Trois états qui s'excluent : les yeux d'un fantôme gobé
+   * en route vers la maison, l'effet d'une super-gomme, ou la sirène
+   * ordinaire — dont la hauteur monte par paliers à mesure que le labyrinthe
+   * se vide. C'est cette montée qui fait la tension des fins de tableau.
+   *
+   * `setLoop` est sans effet si la boucle est déjà dans l'état demandé : on
+   * peut donc l'appeler à chaque rendu sans rien couper.
+   */
+  const sirenStep = Math.min(3, Math.floor(((TOTAL_DOTS - state.dotsLeft) / TOTAL_DOTS) * 4));
+  const playing = state.status === 'running' && state.phase === 'playing';
+  const anyEyes = state.ghosts.some((g) => g.eyes);
+  useEffect(() => {
+    const siren = (['pacSiren1', 'pacSiren2', 'pacSiren3', 'pacSiren4'] as const)[sirenStep];
+    for (const key of ['pacSiren1', 'pacSiren2', 'pacSiren3', 'pacSiren4'] as const) {
+      sounds.setLoop(key, playing && !anyEyes && state.fright <= 0 && key === siren);
+    }
+    sounds.setLoop('pacEyes', playing && anyEyes);
+    sounds.setLoop('pacFright', playing && !anyEyes && state.fright > 0);
+  }, [sounds, playing, anyEyes, state.fright, sirenStep]);
+
+  // Quitter l'écran ou mettre en pause ne doit pas laisser une boucle tourner.
+  useEffect(() => () => sounds.stopAllLoops(), [sounds]);
 
   /* --- score --- */
   useEffect(() => {

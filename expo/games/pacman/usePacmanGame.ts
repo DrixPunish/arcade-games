@@ -751,7 +751,12 @@ export function step(prev: PacmanState, dt: number, refs: Refs): PacmanState {
         // On sort systématiquement vers la gauche, comme sur la borne.
         g.dir = 'left';
         g.eyes = false;
-        g.frightened = s.fright > 0;
+        // `frightened` n'est PAS réappliqué ici. Un fantôme gobé ressort
+        // redevenu dangereux, même si la super-gomme court encore : on ne peut
+        // pas le remanger sans en avaler une nouvelle. C'est la règle de la
+        // borne, et c'est ce qui empêche de vider le labyrinthe en boucle sur
+        // une seule gomme. Ceux qui attendaient DANS la maison, eux, ont déjà
+        // été mis au bleu par la super-gomme et le restent.
       }
       continue;
     }

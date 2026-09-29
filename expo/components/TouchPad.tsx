@@ -21,7 +21,12 @@ import {
  */
 
 /** `hold` = actif tant que le doigt reste dessus. `tap` = déclenché à l'appui. */
-export type PadButtonMode = 'hold' | 'tap';
+/**
+ * `spacer` réserve une case vide dans la grille, sans zone tactile. C'est ce
+ * qui permet de dessiner une vraie croix directionnelle, avec ses coins et son
+ * centre creux, au lieu d'aligner les flèches côte à côte.
+ */
+export type PadButtonMode = 'hold' | 'tap' | 'spacer';
 export type PadButton = { key: string; label: string; mode: PadButtonMode; flex?: number };
 export type PadRow = PadButton[];
 
@@ -44,7 +49,7 @@ export function MultiTouchPad({
   /** Dessine les zones tactiles mesurées, pour mettre au point un réglage. */
   debugHitboxes?: boolean;
 }): React.ReactElement {
-  const buttons = useMemo(() => rows.flat(), [rows]);
+  const buttons = useMemo(() => rows.flat().filter((b) => b.mode !== 'spacer'), [rows]);
   const keys = useMemo(() => buttons.map((b) => b.key), [buttons]);
   const modes = useMemo(
     () => Object.fromEntries(buttons.map((b) => [b.key, b.mode])) as Record<string, PadButtonMode>,
@@ -192,16 +197,20 @@ export function MultiTouchPad({
     >
       {rows.map((row, rowIndex) => (
         <View key={`row-${rowIndex}`} style={styles.row} onLayout={measureAll}>
-          {row.map((button) => (
-            <VisualButton
-              key={button.key}
-              label={button.label}
-              active={active[button.key] === true}
-              style={{ flex: button.flex ?? 1 }}
-              innerRef={setRef(button.key)}
-              onLayout={() => measureKey(button.key)}
-            />
-          ))}
+          {row.map((button) =>
+            button.mode === 'spacer' ? (
+              <View key={button.key} style={{ flex: button.flex ?? 1 }} />
+            ) : (
+              <VisualButton
+                key={button.key}
+                label={button.label}
+                active={active[button.key] === true}
+                style={{ flex: button.flex ?? 1 }}
+                innerRef={setRef(button.key)}
+                onLayout={() => measureKey(button.key)}
+              />
+            ),
+          )}
         </View>
       ))}
 
@@ -393,17 +402,30 @@ export function TrackFieldControls({
 /* ------------------------------------------------------------- Pac-Man --- */
 
 /**
- * Une croix directionnelle à quatre branches. Les boutons sont en mode
- * maintenu et non en appui simple : la direction demandée reste affichée tant
- * que le doigt est posé, ce qui donne le même retour visuel qu'un vrai
- * joystick — et le moteur, lui, l'applique au prochain centre de case.
+ * Une vraie croix directionnelle : coins et centre creux, comme sur une
+ * manette. Les quatre flèches alignées sur deux rangées obligeaient à viser,
+ * alors que le pouce trouve une croix sans regarder.
+ *
+ * Les boutons sont en mode maintenu et non en appui simple : la direction
+ * demandée reste allumée tant que le doigt est posé, ce qui donne le même
+ * retour visuel qu'un joystick — et le moteur, lui, l'applique au prochain
+ * centre de case.
  */
 const PACMAN_ROWS: PadRow[] = [
-  [{ key: 'up', label: '▲', mode: 'hold' }],
+  [
+    { key: 'padNW', label: '', mode: 'spacer' },
+    { key: 'up', label: '▲', mode: 'hold' },
+    { key: 'padNE', label: '', mode: 'spacer' },
+  ],
   [
     { key: 'left', label: '◀', mode: 'hold' },
-    { key: 'down', label: '▼', mode: 'hold' },
+    { key: 'padC', label: '', mode: 'spacer' },
     { key: 'right', label: '▶', mode: 'hold' },
+  ],
+  [
+    { key: 'padSW', label: '', mode: 'spacer' },
+    { key: 'down', label: '▼', mode: 'hold' },
+    { key: 'padSE', label: '', mode: 'spacer' },
   ],
 ];
 

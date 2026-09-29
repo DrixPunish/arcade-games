@@ -357,3 +357,46 @@ test('un parcours parfait aux haies garde son elan et bat le minima', () => {
     expect(g.state.result).toBeLessThan(minima);
   }
 });
+
+/* ------------------------------------------------------------- notation -- */
+
+test('aller plus vite rapporte PLUS de points, et sauter plus loin aussi', () => {
+  // Le calcul precedent etait `resultat x 100` : 12,4 s valaient 1240 points
+  // quand 9,18 s n'en valaient que 918. Courir vite etait donc puni.
+  const vite = TF.scoreFor('dash100', 9.18);
+  const lent = TF.scoreFor('dash100', 12.4);
+  console.log(`  -> 100 m : 9,18 s -> ${vite} pts | 12,40 s -> ${lent} pts`);
+  expect(vite).toBeGreaterThan(lent);
+
+  const haiesVite = TF.scoreFor('hurdles', 10.2);
+  const haiesLent = TF.scoreFor('hurdles', 14.0);
+  console.log(`  -> haies : 10,20 s -> ${haiesVite} pts | 14,00 s -> ${haiesLent} pts`);
+  expect(haiesVite).toBeGreaterThan(haiesLent);
+
+  // Aux concours, c'est l'inverse : plus loin vaut plus.
+  expect(TF.scoreFor('longJump', 7.9)).toBeGreaterThan(TF.scoreFor('longJump', 4.5));
+  expect(TF.scoreFor('javelin', 84)).toBeGreaterThan(TF.scoreFor('javelin', 47));
+
+  // Les quatre epreuves pesent le meme poids : un javelot a 85 m ne doit pas
+  // valoir vingt fois un saut a 8 m.
+  const perfect = [
+    TF.scoreFor('dash100', 9.33), TF.scoreFor('longJump', 7.92),
+    TF.scoreFor('javelin', 84.7), TF.scoreFor('hurdles', 10.22),
+  ];
+  console.log(`  -> parcours parfait : ${perfect.join(' + ')} = ${perfect.reduce((a, b) => a + b, 0)} pts`);
+  expect(Math.max(...perfect) / Math.min(...perfect)).toBeLessThan(2);
+  // Pile au minima, on marque environ 1000 points.
+  expect(TF.scoreFor('dash100', CONFIG.trackField.qualify.dash100)).toBe(1000);
+});
+
+test('le javelot pique du nez en fin de vol', () => {
+  const { launchSpeed, height } = TF.flightSetup('javelin', CONFIG.trackField.topSpeed);
+  const range = TF.projectileRange(launchSpeed, 43, height);
+  const debut = TF.flightAngleAt(launchSpeed, 43, 1);
+  const milieu = TF.flightAngleAt(launchSpeed, 43, range / 2);
+  const fin = TF.flightAngleAt(launchSpeed, 43, range);
+  console.log(`  -> inclinaison : ${debut.toFixed(0)}deg -> ${milieu.toFixed(0)}deg -> ${fin.toFixed(0)}deg sur ${range.toFixed(0)} m`);
+  expect(debut).toBeGreaterThan(40);
+  expect(Math.abs(milieu)).toBeLessThan(10);
+  expect(fin).toBeLessThan(-35);
+});

@@ -30,8 +30,30 @@ test('chaque son de Space Invaders produit un echantillon audible', async () => 
   for (const key of INVADERS) {
     expect(`${key}:present`).toBe(`${key}:${mod.includes(`case '${key}'`) ? 'present' : 'absent'}`);
   }
-  for (const key of LOOPS) {
-    expect(`${key}:boucle`).toBe(`${key}:${mod.includes(`case '${key}'`) ? 'boucle' : 'absente'}`);
+});
+
+/** Contenu d'un bloc `const NOM = { ... };` du fichier source. */
+function blockOf(mod: string, name: string): string {
+  const start = mod.indexOf(`const ${name}`);
+  return start < 0 ? '' : mod.slice(start, mod.indexOf('};', start));
+}
+
+test('toute boucle declaree possede un timbre', async () => {
+  const mod = await Bun.file(SOURCE).text();
+  // Une cle marquee comme boucle mais absente de la table des timbres serait
+  // silencieuse, sans la moindre erreur : c'est le genre de panne qu'on ne
+  // remarque qu'en jouant.
+  const looping = blockOf(mod, 'LOOPING');
+  const tones = blockOf(mod, 'LOOP_TONE');
+  const declared = [...looping.matchAll(/^\s{2}(\w+):\s*true/gm)].map((m) => m[1]);
+  console.log(`  -> ${declared.length} boucles declarees : ${declared.join(', ')}`);
+  expect(declared.length).toBeGreaterThanOrEqual(LOOPS.length);
+  for (const key of declared) {
+    // `thrust` est du bruit filtre, pas une onde ondulante : il a son propre
+    // chemin dans les deux backends.
+    if (key === 'thrust') continue;
+    const hasTone = new RegExp(`^\\s{2}${key}:`, 'm').test(tones);
+    expect(`${key}:timbre`).toBe(`${key}:${hasTone ? 'timbre' : 'MANQUANT'}`);
   }
 });
 

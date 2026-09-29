@@ -1,22 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Line, Path, Rect } from 'react-native-svg';
+import Svg, { G, Line, Path, Rect } from 'react-native-svg';
 
 import { ArcadeButton } from '../components/ArcadeButton';
 import { HighScorePrompt } from '../components/HighScorePrompt';
 import { TrackFieldControls } from '../components/TouchPad';
 import { CONFIG } from '../lib/gameConfig';
-import { spritePath, spritePathsByKey } from '../lib/pixelArt';
+import { spritePathsByKey } from '../lib/pixelArt';
 import { qualifiesForHighScore, saveHighScore } from '../lib/highScores';
 import {
   EVENT_LABEL,
   EVENT_ORDER,
   EVENT_UNIT,
   TRACK_DIMENSIONS,
+  flightAngleAt,
+  flightSetup,
   isFieldEvent,
   useTrackFieldGame,
 } from '../games/track-field/useTrackFieldGame';
-import { ATHLETE_JUMP, ATHLETE_PALETTE, JAVELIN, RUN_FRAMES } from '../games/track-field/sprites';
+import { ATHLETE_JUMP, ATHLETE_PALETTE, RUN_FRAMES } from '../games/track-field/sprites';
 
 import {
   ATHLETE_PIXEL,
@@ -37,6 +39,13 @@ import {
   W,
   WALL_TOP,
 } from '../games/track-field/stadium';
+
+/**
+ * Échelle VERTICALE des vols, en pixels par mètre. Elle est volontairement
+ * plus serrée que l'horizontale (9 px/m) : un javelot culmine vers 20 m alors
+ * qu'il n'y a qu'une cinquantaine de pixels entre la piste et le mur du stade.
+ */
+const FLIGHT_PX_PER_M = 2.4;
 
 export function TrackFieldGameScreen({
   onExit,
@@ -75,8 +84,15 @@ export function TrackFieldGameScreen({
     [state.score, onScores],
   );
 
-  // --- Caméra : l'athlète reste au tiers gauche de l'écran ---
-  const athleteWorld = state.phase === 'flying' ? TRACK_DIMENSIONS.RUNWAY_LENGTH : state.runDistance;
+  // --- Caméra : on suit ce qui compte, au tiers gauche de l'écran ---
+  //
+  // Pendant un vol, c'est le PROJECTILE qu'on suit, pas l'athlète resté à la
+  // planche : un javelot part à plus de 80 m et on ne voyait pas où il
+  // retombait, donc ni le résultat ni l'effet de l'angle choisi.
+  const athleteWorld =
+    state.phase === 'flying'
+      ? TRACK_DIMENSIONS.RUNWAY_LENGTH + state.flightDistance
+      : state.runDistance;
   const camera = Math.max(0, athleteWorld - 12);
   const toScreen = (metres: number): number => (metres - camera) * PX_PER_M + 40;
 
@@ -92,7 +108,12 @@ export function TrackFieldGameScreen({
   // franchement la haie, sans quoi un franchissement réussi ressemblait à un
   // passage au travers.
   const hopHeight = state.airborne ? state.flightHeight * HURDLE_LIFT : 0;
-  const flightLift = state.phase === 'flying' ? state.flightHeight * 6 : 0;
+  // `flightHeight` est une HAUTEUR EN MÈTRES aux concours. Au javelot elle
+  // monte à une vingtaine de mètres : l'appliquer à l'athlète le catapultait
+  // en haut de l'écran au moment du lâcher. Seul le sauteur en longueur
+  // quitte le sol.
+  const flightLift =
+    state.phase === 'flying' && event === 'longJump' ? state.flightHeight * 6 : 0;
   const athleteX =
     state.phase === 'flying' && event === 'longJump'
       ? toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH + state.flightDistance)
@@ -100,6 +121,14 @@ export function TrackFieldGameScreen({
   // 12 rangées de sprite : les pieds tombent pile sur la ligne de course.
   const ATHLETE_H = 12 * ATHLETE_PIXEL;
   const athleteY = GROUND - ATHLETE_H - hopHeight - flightLift;
+
+  // Un javelot culmine vers 20 m alors qu'il n'y a que ~56 px entre la piste
+  // et le mur du stade : la verticale est donc plus comprimée que
+  // l'horizontale. C'est le compromis habituel de ce genre d'affichage.
+  const javelinTilt =
+    state.phase === 'flying' && event === 'javelin'
+      ? flightAngleAt(flightSetup('javelin', state.speed).launchSpeed, state.angle, state.flightDistance)
+      : 0;
 
   const speedRatio = Math.min(1, state.speed / CONFIG.trackField.topSpeed);
   const finished = state.phase === 'result' || state.phase === 'eventOver';
@@ -211,29 +240,56 @@ export function TrackFieldGameScreen({
             </>
           )}
 
-          {/* Haies : la zone d'appel au sol, puis deux pieds et une barre */}
+          {/* Haies : la zone d'appel, puis deux pieds et une barre */}
           {event === 'hurdles' &&
             state.hurdles.map((h, i) => {
               const x = toScreen(h.x);
               if (x < -80 || x > W + 20) return null;
               const colour = h.cleared ? '#8a6a55' : '#eaffff';
               const zoneW = CONFIG.trackField.hurdleTakeoffZone * PX_PER_M;
+              // Vert dès que le saut est armé sur CETTE haie : c'est le retour
+              // qui manquait. Appuyer ne produisait rien de visible avant le
+              // décollage, et on ne savait ni si l'appui avait été pris, ni
+              // s'il fallait être entré dans la zone ou l'avoir traversée.
+              const armed = state.armedHurdle === h.x;
               return (
                 <React.Fragment key={`h${i}`}>
-                  {/* Appuyer sur cette bande cale le saut sur la haie. */}
+                  {/* Appuyer n'importe où dans cette bande cale le saut. */}
                   {h.cleared ? null : (
                     <>
                       <Rect
                         x={x - zoneW}
-                        y={GROUND - 3}
+                        y={GROUND - 1}
                         width={zoneW}
-                        height={3}
-                        fill="rgba(255,224,131,0.5)"
+                        height={H - GROUND + 1}
+                        fill={armed ? 'rgba(90,240,140,0.34)' : 'rgba(255,224,131,0.2)'}
                       />
-                      <Rect x={x - zoneW} y={GROUND - 8} width={2} height={8} fill="#ffe083" />
+                      {[0, 1, 2, 3].map((k) => (
+                        <Rect
+                          key={`hz${i}-${k}`}
+                          x={x - zoneW + 4 + k * (zoneW / 4)}
+                          y={GROUND + 4}
+                          width={6}
+                          height={3}
+                          fill={armed ? '#5af08c' : '#ffe083'}
+                        />
+                      ))}
+                      <Rect
+                        x={x - zoneW}
+                        y={GROUND - 10}
+                        width={2}
+                        height={10}
+                        fill={armed ? '#5af08c' : '#ffe083'}
+                      />
                     </>
                   )}
-                  <Rect x={x} y={GROUND - HURDLE_HEIGHT} width={10} height={3} fill={colour} />
+                  <Rect
+                    x={x}
+                    y={GROUND - HURDLE_HEIGHT}
+                    width={10}
+                    height={3}
+                    fill={armed ? '#5af08c' : colour}
+                  />
                   <Rect x={x} y={GROUND - HURDLE_HEIGHT} width={2} height={HURDLE_HEIGHT} fill={colour} />
                   <Rect
                     x={x + 8}
@@ -269,18 +325,18 @@ export function TrackFieldGameScreen({
               );
             })()}
 
-          {/* Javelot en vol */}
+          {/* Javelot en vol : il s'incline comme sa trajectoire. */}
           {state.phase === 'flying' && event === 'javelin' && (
-            <Path
-              d={spritePath(
-                JAVELIN,
-                toScreen(TRACK_DIMENSIONS.RUNWAY_LENGTH + state.flightDistance),
-                GROUND - 16 - state.flightHeight * PX_PER_M * 0.35,
-                3.5,
-                3.5,
-              )}
-              fill="#ff9d5c"
-            />
+            <G
+              transform={`translate(${toScreen(
+                TRACK_DIMENSIONS.RUNWAY_LENGTH + state.flightDistance,
+              ).toFixed(1)}, ${(GROUND - 4 - state.flightHeight * FLIGHT_PX_PER_M).toFixed(
+                1,
+              )}) rotate(${(-javelinTilt).toFixed(1)})`}
+            >
+              <Rect x={-14} y={-1} width={28} height={2} fill="#ff9d5c" />
+              <Rect x={10} y={-2} width={6} height={4} fill="#ffd9b8" />
+            </G>
           )}
 
           {/* L'athlète */}

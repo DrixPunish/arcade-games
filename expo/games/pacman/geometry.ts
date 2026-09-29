@@ -72,6 +72,45 @@ function buildWallPath(): string {
 
 export const WALL_PATH = buildWallPath();
 
+/**
+ * Le REMPLISSAGE des blocs de mur, en un seul tracé.
+ *
+ * Le contour seul ne suffisait pas : l'intérieur d'un bloc et un couloir
+ * étaient tous deux noirs, et rien ne disait lequel des deux on regardait. On
+ * s'engageait dans ce qu'on croyait être un passage. Une teinte sombre sous
+ * le contour donne de la masse aux murs et rend les couloirs évidents.
+ *
+ * Les cases voisines d'une même rangée sont fusionnées : le labyrinthe entier
+ * tient en quelques dizaines de rectangles.
+ */
+function buildWallFill(): string {
+  const parts: string[] = [];
+  for (let r = 0; r < ROWS; r += 1) {
+    let c = 0;
+    while (c < COLS) {
+      if (tileAt(c, r) !== 'wall') {
+        c += 1;
+        continue;
+      }
+      let end = c;
+      while (end + 1 < COLS && tileAt(end + 1, r) === 'wall') end += 1;
+      const w = (end - c + 1) * TILE;
+      parts.push(`M${c * TILE} ${r * TILE}h${w}v${TILE}h${-w}Z`);
+      c = end + 1;
+    }
+  }
+  return parts.join('');
+}
+
+export const WALL_FILL = buildWallFill();
+
+
+/** Nombre total de gommes d'un tableau neuf — 240 pac-gommes et 4 super-gommes. */
+export const TOTAL_DOTS = MAZE.reduce(
+  (n, row) => n + [...row].filter((c) => c === '.' || c === 'o').length,
+  0,
+);
+
 /** Les quatre super-gommes, repérées dans la grille une fois pour toutes. */
 export const POWER_PELLETS: readonly { col: number; row: number }[] = (() => {
   const out: { col: number; row: number }[] = [];

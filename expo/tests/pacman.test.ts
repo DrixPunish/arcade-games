@@ -551,3 +551,32 @@ test('une rotation de quatre quarts de tour revient au point de depart', () => {
   expect(ART.rotateBitmap(b, 4)).toEqual(b);
   expect(ART.rotateBitmap(ART.rotateBitmap(b, 1), 3)).toEqual(b);
 });
+
+test('un fantome gobe ressort DANGEREUX, meme si la super-gomme court encore', () => {
+  const g = mount();
+  g.begin();
+  // Super-gomme du haut a gauche.
+  g.state.pac.col = 1; g.state.pac.row = 5; g.state.pac.dir = 'up';
+  for (let i = 0; i < 60 * 5 && g.state.fright <= 0; i += 1) { g.controls.steer('up'); g.step(); }
+  expect(g.state.fright).toBeGreaterThan(0);
+
+  // On gobe Blinky.
+  const gh = g.state.ghosts.find((x: any) => x.frightened && x.phase === 'out');
+  expect(gh).toBeTruthy();
+  gh.col = g.state.pac.col; gh.row = g.state.pac.row;
+  g.step();
+  const name = gh.name;
+  expect(g.state.ghosts.find((x: any) => x.name === name).eyes).toBe(true);
+
+  // On le suit jusqu'a sa sortie de la maison, l'effet courant toujours.
+  let out = false;
+  for (let i = 0; i < 60 * 20 && !out; i += 1) {
+    g.step();
+    const now = g.state.ghosts.find((x: any) => x.name === name);
+    if (!now.eyes && now.phase === 'out') out = true;
+  }
+  const back = g.state.ghosts.find((x: any) => x.name === name);
+  console.log(`  -> ${name} ressorti : bleu=${back.frightened}, effet restant ${g.state.fright.toFixed(1)} s`);
+  expect(out).toBe(true);
+  expect(back.frightened).toBe(false);
+});

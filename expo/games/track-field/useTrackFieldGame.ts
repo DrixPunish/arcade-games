@@ -75,6 +75,12 @@ export type TrackFieldState = {
   /** Saut en cours (haies). */
   airborne: boolean;
   hurdles: Hurdle[];
+  /**
+   * Haie sur laquelle le saut est armé, s'il y en a une. L'écran l'allume :
+   * sans ce retour, appuyer dans la zone ne produisait rien de visible avant
+   * le décollage, et on ne savait pas si l'appui avait été pris en compte.
+   */
+  armedHurdle: number | null;
   /** Ligne d'appel franchie : l'essai est mordu. */
   foul: boolean;
   message: string;
@@ -104,6 +110,7 @@ const baseAttempt = (state: TrackFieldState): TrackFieldState => ({
   airborne: false,
   foul: false,
   hurdles: makeHurdles(),
+  armedHurdle: null,
   message: '',
 });
 
@@ -126,6 +133,7 @@ const initial = (): TrackFieldState =>
     best: 0,
     airborne: false,
     hurdles: makeHurdles(),
+    armedHurdle: null,
     foul: false,
     message: '',
   });
@@ -164,6 +172,20 @@ export function projectileRange(speed: number, angleDeg: number, h: number): num
   return (vx * (vy + Math.sqrt(vy * vy + 2 * g * h))) / g;
 }
 
+/**
+ * Inclinaison du projectile après `d` mètres, en degrés. Un javelot pique du
+ * nez en fin de course : le dessiner à angle fixe donnait un trait qui
+ * flottait à plat sans jamais retomber.
+ */
+export function flightAngleAt(speed: number, angleDeg: number, d: number): number {
+  const a = (angleDeg * Math.PI) / 180;
+  const vx = speed * Math.cos(a);
+  if (vx <= 0.01) return angleDeg;
+  const t = d / vx;
+  const vy = speed * Math.sin(a) - CONFIG.trackField.gravity * t;
+  return (Math.atan2(vy, vx) * 180) / Math.PI;
+}
+
 /** Hauteur du projectile après `d` mètres parcourus, pour l'affichage. */
 function heightAt(speed: number, angleDeg: number, h: number, d: number): number {
   const a = (angleDeg * Math.PI) / 180;
@@ -172,6 +194,24 @@ function heightAt(speed: number, angleDeg: number, h: number, d: number): number
   const t = d / vx;
   const g = CONFIG.trackField.gravity;
   return Math.max(0, h + speed * Math.sin(a) * t - 0.5 * g * t * t);
+}
+
+/**
+ * Points d'une performance.
+ *
+ * Le calcul précédent était `résultat × 100`, ce qui marchait aux concours
+ * mais s'inversait aux courses : 12,4 s rapportaient 1240 points quand 9,18 s
+ * n'en rapportaient que 918. Courir vite était donc pénalisé.
+ *
+ * On note désormais l'ÉCART AU MINIMA, dans le bon sens selon l'épreuve, ce
+ * qui a l'avantage de mettre les quatre épreuves sur la même échelle : un
+ * javelot à 85 m ne vaut plus vingt fois un saut à 8 m.
+ */
+export function scoreFor(event: EventId, result: number): number {
+  if (result <= 0) return 0;
+  const target = CONFIG.trackField.qualify[event];
+  const ratio = EVENT_UNIT[event] === 's' ? target / result : result / target;
+  return Math.round(ratio * 1000);
 }
 
 export function useTrackFieldGame(): {
@@ -298,6 +338,7 @@ export function useTrackFieldGame(): {
                 // décollera tout seul au bon endroit. C'est ce qui permet de
                 // garder un vol court sans exiger un appui à la milliseconde.
                 armed.current = next.x;
+                n.armedHurdle = next.x;
               } else {
                 // Loin de toute haie : un simple bond, qui ne fige rien.
                 n.airborne = true;
@@ -319,13 +360,18 @@ export function useTrackFieldGame(): {
                 n.airborne = true;
                 jump.current = { from, span: cfg.hurdleTakeoff * 2, time: 0, snapped: true };
                 armed.current = null;
+                n.armedHurdle = null;
               }
             }
             if (n.airborne) {
               jump.current.time += dt;
               const progress = (n.runDistance - jump.current.from) / jump.current.span;
               // Un ARC, pas une rampe : on monte puis on redescend.
-              n.flightHeight = Math.max(0, Math.sin(Math.min(1, progress) * Math.PI));
+              // Un bond hors zone reste bas et court : le joueur voit
+              // immédiatement qu'il n'a pas armé son saut, au lieu de se
+              // demander pourquoi il « saute sur place » une fois sur deux.
+              const arc = Math.max(0, Math.sin(Math.min(1, progress) * Math.PI));
+              n.flightHeight = jump.current.snapped ? arc : arc * 0.4;
               if (progress >= 1 || jump.current.time > cfg.hurdleJumpMaxTime) {
                 n.airborne = false;
                 n.flightHeight = 0;
@@ -333,7 +379,11 @@ export function useTrackFieldGame(): {
             }
             n.hurdles = n.hurdles.map((h) => {
               if (h.cleared || n.runDistance < h.x) return h;
-              if (!n.airborne) {
+              // Seul un saut CALÉ sur la haie la franchit. Un bond déclenché
+              // hors de la zone pouvait auparavant passer une barre par
+              // accident : la règle devenait illisible, on ne savait plus à
+              // quoi servait la zone.
+              if (!n.airborne || !jump.current.snapped) {
                 // On trébuche, on ne s'arrête pas net.
                 n.speed *= cfg.hurdleHitPenalty;
                 n.message = 'Haie renversée !';
@@ -408,7 +458,7 @@ export function useTrackFieldGame(): {
             best,
             phase: 'eventOver',
             message: passed ? 'Qualifié !' : 'Éliminé',
-            score: passed ? s.score + Math.round(best * 100) : s.score,
+            score: passed ? s.score + scoreFor(event, best) : s.score,
             lives: passed ? s.lives : s.lives - 1,
           };
         }

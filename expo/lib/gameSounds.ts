@@ -28,7 +28,13 @@ export type ArcadeSoundKey =
   | 'pacEatGhost'
   | 'pacFruit'
   | 'pacDeath'
-  | 'pacExtraLife';
+  | 'pacExtraLife'
+  | 'pacSiren1'
+  | 'pacSiren2'
+  | 'pacSiren3'
+  | 'pacSiren4'
+  | 'pacFright'
+  | 'pacEyes';
 
 const ALL_KEYS: ArcadeSoundKey[] = [
   'fire',
@@ -55,6 +61,12 @@ const ALL_KEYS: ArcadeSoundKey[] = [
   'pacFruit',
   'pacDeath',
   'pacExtraLife',
+  'pacSiren1',
+  'pacSiren2',
+  'pacSiren3',
+  'pacSiren4',
+  'pacFright',
+  'pacEyes',
 ];
 
 const POOL_SIZE: Record<ArcadeSoundKey, number> = {
@@ -87,6 +99,12 @@ const POOL_SIZE: Record<ArcadeSoundKey, number> = {
   pacFruit: 2,
   pacDeath: 1,
   pacExtraLife: 1,
+  pacSiren1: 1,
+  pacSiren2: 1,
+  pacSiren3: 1,
+  pacSiren4: 1,
+  pacFright: 1,
+  pacEyes: 1,
 };
 
 const LOOPING: Partial<Record<ArcadeSoundKey, boolean>> = {
@@ -94,6 +112,32 @@ const LOOPING: Partial<Record<ArcadeSoundKey, boolean>> = {
   saucerBig: true,
   saucerSmall: true,
   siUfo: true,
+  // Le fond sonore de Pac-Man : une sirène continue dont la hauteur monte à
+  // mesure que le labyrinthe se vide, remplacée par un autre timbre pendant
+  // l'effet d'une super-gomme et par le sifflement des yeux qui rentrent.
+  pacSiren1: true,
+  pacSiren2: true,
+  pacSiren3: true,
+  pacSiren4: true,
+  pacFright: true,
+  pacEyes: true,
+};
+
+/**
+ * Timbre des boucles ondulantes, partagé par les deux backends : le natif en
+ * fabrique un WAV, le web pilote un oscillateur. Les avoir ici évite que les
+ * deux implémentations divergent sans qu'on s'en aperçoive.
+ */
+const LOOP_TONE: Partial<Record<ArcadeSoundKey, { base: number; lfo: number; gain: number }>> = {
+  saucerBig: { base: 220, lfo: 4, gain: 0.18 },
+  saucerSmall: { base: 520, lfo: 8, gain: 0.18 },
+  siUfo: { base: 700, lfo: 14, gain: 0.15 },
+  pacSiren1: { base: 172, lfo: 5, gain: 0.13 },
+  pacSiren2: { base: 205, lfo: 7, gain: 0.13 },
+  pacSiren3: { base: 240, lfo: 9, gain: 0.13 },
+  pacSiren4: { base: 282, lfo: 12, gain: 0.13 },
+  pacFright: { base: 124, lfo: 17, gain: 0.15 },
+  pacEyes: { base: 600, lfo: 24, gain: 0.12 },
 };
 
 const TAG = '[gameSounds]';
@@ -305,15 +349,10 @@ function synthLoop(key: ArcadeSoundKey): Float32Array {
   switch (key) {
     case 'thrust':
       return genNoiseLoop(0.5, 0.18, 380);
-    case 'saucerBig':
-      return genSaucerLoop(220, 4, 0.5, 0.18);
-    case 'saucerSmall':
-      return genSaucerLoop(520, 8, 0.5, 0.18);
-    case 'siUfo':
-      // Sirène rapide, plus aiguë que les soucoupes d'Asteroids.
-      return genSaucerLoop(700, 14, 0.5, 0.15);
-    default:
-      return new Float32Array(0);
+    default: {
+      const tone = LOOP_TONE[key];
+      return tone ? genSaucerLoop(tone.base, tone.lfo, 0.5, tone.gain) : new Float32Array(0);
+    }
   }
 }
 
@@ -578,18 +617,18 @@ class WebSoundBackend implements SoundBackend {
       };
     }
 
-    const baseFreq = key === 'saucerBig' ? 220 : key === 'siUfo' ? 700 : 520;
+    const tone = LOOP_TONE[key] ?? { base: 520, lfo: 8, gain: 0.18 };
     const osc = ctx.createOscillator();
     osc.type = 'square';
-    osc.frequency.value = baseFreq;
+    osc.frequency.value = tone.base;
     const lfo = ctx.createOscillator();
-    lfo.frequency.value = key === 'saucerBig' ? 4 : key === 'siUfo' ? 14 : 8;
+    lfo.frequency.value = tone.lfo;
     const lfoGain = ctx.createGain();
-    lfoGain.gain.value = baseFreq * 0.15;
+    lfoGain.gain.value = tone.base * 0.15;
     lfo.connect(lfoGain);
     lfoGain.connect(osc.frequency);
     const g = ctx.createGain();
-    g.gain.value = 0.18;
+    g.gain.value = tone.gain;
     osc.connect(g);
     g.connect(master);
     osc.start();
